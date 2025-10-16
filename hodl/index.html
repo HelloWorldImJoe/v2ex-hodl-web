@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>V2EX HODL 数据浏览器</title>
+  <style>
+    :root { --fg:#0f172a; --muted:#64748b; --bg:#f8fafc; --card:#ffffff; --pri:#2563eb; }
+    * { box-sizing: border-box; }
+    body { margin:0; font:14px/1.6 -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; color:var(--fg); background:var(--bg); }
+    header { display:flex; align-items:center; gap:12px; padding:16px 20px; background:var(--card); border-bottom:1px solid #e2e8f0; position:sticky; top:0; z-index:10; }
+    header img { width:36px; height:36px; border-radius:8px; }
+    header h1 { font-size:16px; margin:0; }
+    main { max-width: none; margin: 0 auto; padding: 0 20px; }
+    .card { min-height: calc(100vh - 68px); display: flex; flex-direction: column; }
+    .grid { width: 100%; overflow: auto; flex: 1; }
+    .chart-wrap { height: 340px; margin-top: 12px; }
+    .chart-wrap canvas { width: 100% !important; height: 100% !important; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; }
+    label { font-weight:600; color:#334155; }
+    input, select { height:34px; padding:0 10px; border:1px solid #cbd5e1; border-radius:8px; background:white; }
+    input[type="number"] { width:110px; }
+    input[type="text"] { width:260px; }
+    .btn { height:34px; padding:0 12px; border-radius:8px; border:1px solid var(--pri); color:white; background:var(--pri); cursor:pointer; }
+    .btn.secondary { background:white; color:var(--pri); }
+    .toolbar { display:flex; gap:10px; align-items:end; flex-wrap:wrap; }
+    table { border-collapse: collapse; width:100%; }
+    th, td { padding:8px 10px; border-bottom:1px solid #eef2f7; white-space:nowrap; }
+    th { background:#f8fafc; position:sticky; top:0; z-index:1; text-align:left; }
+    .muted { color:var(--muted); }
+    .hint { font-size:12px; color:var(--muted); }
+    .mt8 { margin-top:8px; }
+    .mt12 { margin-top:12px; }
+    .mt16 { margin-top:16px; }
+    .error { color:#b91c1c; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/30e0d3f6-6076-40f8-7abb-8a7676f83c00/public" alt="logo" />
+    <h1>V2EX HODL 数据浏览器</h1>
+  </header>
+  <main>
+    <div class="card">
+      <div class="toolbar">
+        <label>
+          API 基础地址
+          <input id="apiBase" type="text" placeholder="例如：https://api.example.com" />
+        </label>
+        <label>
+          数据表
+          <select id="table">
+            <option value="stats">v2ex-solana数据(stats)</option>
+            <option value="stats_history">v2ex-solana统计历史(stats_history)</option>
+            <option value="holders">$v2ex持有者(holders)</option>
+            <option value="holders_history">$v2ex持有者历史(holders_history)</option>
+            <option value="profiles">用户档案(profiles)</option>
+            <option value="watermarks">任务水位(watermarks)</option>
+          </select>
+        </label>
+        <label>
+          开始时间
+          <input id="from" type="text" placeholder="ISO 或 时间戳（秒/毫秒）" />
+        </label>
+        <label>
+          结束时间
+          <input id="to" type="text" placeholder="ISO 或 时间戳（秒/毫秒）" />
+        </label>
+        <label>
+          代币
+          <input id="token" type="text" placeholder="代币 Mint（仅 holders* 生效）" />
+        </label>
+        <label>
+          持有者/地址
+          <input id="owner" type="text" placeholder="持有者地址或 Profile 地址" />
+        </label>
+        <label>
+          排序
+          <select id="order">
+            <option value="desc">降序</option>
+            <option value="asc">升序</option>
+          </select>
+        </label>
+        <label>
+          查询数量
+          <input id="limit" type="number" value="50" min="1" max="5000" />
+        </label>
+        <label>
+          页数
+          <input id="offset" type="number" value="0" min="0" />
+        </label>
+        <button class="btn" id="run">查询</button>
+        <button class="btn secondary" id="clear">清空结果</button>
+      </div>
+      <div class="hint mt8">提示：holders* 仅在选择 holders/holders_history 时生效；profiles 使用 address 过滤 solana_address。</div>
+      <div id="error" class="error mt12" hidden></div>
+      <div id="summary" class="muted mt12"></div>
+
+      <!-- 新增：图表控制与图表容器 -->
+      <div id="chartControls" class="toolbar mt12" hidden>
+        <label>
+          Y轴
+          <select id="chartY"></select>
+        </label>
+        <label>
+          X轴
+          <select id="chartX"></select>
+        </label>
+        <span id="chartCount" class="muted"></span>
+        <!-- 新增：当前点信息 -->
+        <span id="chartPoint" class="muted"></span>
+        <!-- 新增：反转 X 轴按钮 -->
+        <button class="btn secondary" id="toggleReverse">X轴：正序</button>
+      </div>
+      <div id="chartWrap" class="chart-wrap" hidden>
+        <canvas id="chart"></canvas>
+      </div>
+
+      <div class="grid mt16">
+        <table id="grid"><thead></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </main>
+
+  <!-- 新增：引入 Chart.js（在业务脚本之前） -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+<script>
+  const el = (id) => document.getElementById(id);
+  const table = el('table');
+  const apiBase = el('apiBase');
+  const from = el('from');
+  const to = el('to');
+  const token = el('token');
+  const owner = el('owner');
+  const order = el('order');
+  const limit = el('limit');
+  const offset = el('offset');
+  const runBtn = el('run');
+  const clearBtn = el('clear');
+  const errorBox = el('error');
+  const summary = el('summary');
+  const thead = document.querySelector('#grid thead');
+  const tbody = document.querySelector('#grid tbody');
+
+  // 新增：图表相关引用与状态
+  const chartWrap = document.getElementById('chartWrap');
+  const chartControls = document.getElementById('chartControls');
+  const chartX = document.getElementById('chartX');
+  const chartY = document.getElementById('chartY');
+  const chartEl = document.getElementById('chart');
+  const chartCount = document.getElementById('chartCount');
+  const chartPoint = document.getElementById('chartPoint');
+  // 新增：反转按钮引用
+  const toggleReverse = document.getElementById('toggleReverse');
+  let chartInstance = null;
+
+  // 新增：当前数据与轴状态
+  let currentRows = [];
+  let currentXKey = '';
+  let currentYKey = '';
+  // 新增：X 轴是否反转与索引映射（图上索引 -> 原 rows 索引）
+  let reverseX = false;
+  let chartIndexMap = [];
+
+  // 新增：工具函数
+  const timeKeyRe = /(time|date|ts|timestamp|created|updated|block)/i;
+  function isNum(v) { return typeof v === 'number' && isFinite(v); }
+  function isISO(s) { return typeof s === 'string' && !isNaN(Date.parse(s)); }
+  function toLabel(x) {
+    if (isNum(x)) {
+      let ms = x;
+      if (x < 1e11) ms = x * 1000; // 视为秒
+      const d = new Date(ms);
+      if (!isNaN(d)) return fmtLocal(d);
+    } else if (isISO(x)) {
+      const d = new Date(x);
+      if (!isNaN(d)) return fmtLocal(d);
+    }
+    return String(x ?? '');
+  }
+  function detectCols(rows) {
+    const cols = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
+    const numeric = cols.filter(c => rows.some(r => isNum(r[c]) || (!isNaN(parseFloat(r[c])) && r[c] !== null && r[c] !== '')));
+    const timeCandidates = cols.filter(c => {
+      if (timeKeyRe.test(c)) return true;
+      return rows.some(r => {
+        const v = r[c];
+        return (isNum(v) && (v > 1e9)) || isISO(v);
+      });
+    });
+    return { cols, numeric, timeCandidates };
+  }
+
+  // 新增：字段中文名映射与获取函数（请按需补充映射）
+  const fieldLabels = {
+    id: "ID", 
+    // v2ex_hodl / v2ex_hodl_history
+    hodl_10k_addresses_count: "HODL 1万地址数",
+    new_accounts_via_solana: "通过 Solana 新增账号数",
+    total_solana_addresses_linked: "已关联的 Solana 地址总数",
+    sol_tip_operations_count: "SOL 打赏操作次数",
+    member_tips_sent: "成员发送打赏次数",
+    member_tips_received: "成员收到打赏次数",
+    total_sol_tip_amount: "SOL 打赏总额",
+    v2ex_token_tip_count: "V2EX 代币打赏次数",
+    total_v2ex_token_tip_amount: "V2EX 代币打赏总额",
+    statistics_timestamp: "统计时间",
+    start_timestamp: "开始时间",
+    end_timestamp: "结束时间",
+
+    // v2exer_solana_address
+    owner_address: "持有者地址",
+    v2ex_username: "V2EX 用户名",
+    avatar_url: "头像链接",
+    token_address: "代币 Mint 地址",
+    token_account_address: "Token 账户地址",
+    hold_rank: "持币排名",
+    hold_amount: "持币数量",
+    decimals: "小数位",
+    hold_percentage: "持币占比",
+    checked_at: "检查时间",
+
+    // v2exer_profile
+    solana_address: "Solana 地址",
+    created_at: "创建时间",
+    updated_at: "更新时间",
+
+    // v2exer_solana_address_history
+    start_checked_at: "开始检查时间",
+    end_checked_at: "结束检查时间",
+
+    // job_watermark
+    job_name: "任务名称",
+    last_processed_at: "上次处理时间",
+    extra: "附加信息",
+  };
+  function getLabel(k) { return fieldLabels[k] || k; }
+
+  function fillSelect(select, items, selected) {
+    select.innerHTML = items.map(k => `<option value="${k}">${getLabel(k)}</option>`).join('');
+    if (selected && items.includes(selected)) select.value = selected;
+  }
+
+  // 新增：数值格式化（K/M/B），兼容回退
+  const nfCompact = (Intl && Intl.NumberFormat) ? new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 2 }) : null;
+  function fmtNum(n) {
+    if (!isFinite(n)) return '';
+    return nfCompact ? nfCompact.format(n) : String(Math.abs(n) >= 1000 ? (n/1000).toFixed(1) + 'K' : n);
+  }
+
+  // 新增：将标签最多拆成两行（优先按空格；否则按长度切分）
+  function wrap2Lines(s) {
+    if (Array.isArray(s)) return s.slice(0, 2);
+    const str = String(s ?? '');
+    if (!str) return '';
+    const parts = str.split(/\s+/);
+    if (parts.length > 1) {
+      const first = parts.shift();
+      let second = parts.join(' ');
+      if (second.length > 40) second = second.slice(0, 40) + '…';
+      return [first, second];
+    }
+    const max = 12;
+    if (str.length <= max) return str;
+    const first = str.slice(0, max);
+    let second = str.slice(max, max * 2);
+    if (str.length > max * 2) second += '…';
+    return [first, second];
+  }
+
+  // 新增：更新反转按钮文本
+  function updateReverseBtn() {
+    toggleReverse.textContent = reverseX ? 'X轴：反序' : 'X轴：正序';
+  }
+
+  // 新增：格式化 X（用于显示，不换行）
+  function fmtX(x) { return toLabel(x); }
+
+  // 修改：更新 hover 点信息，使用索引映射
+  function updateHovered(idx) {
+    const rowIndex = (chartIndexMap && chartIndexMap[idx] != null) ? chartIndexMap[idx] : idx;
+    if (!currentRows || rowIndex == null || rowIndex < 0 || rowIndex >= currentRows.length) {
+      chartPoint.textContent = '';
+      return;
+    }
+    const r = currentRows[rowIndex];
+    const xv = fmtX(r[currentXKey]);
+    const yvRaw = r[currentYKey];
+    const yvNum = typeof yvRaw === 'string' ? parseFloat(yvRaw) : yvRaw;
+    chartPoint.textContent = `当前点：${getLabel(currentXKey)}=${xv}，${getLabel(currentYKey)}=${fmtNum(yvNum)}`;
+  }
+
+  function buildChart(rows, xKey, yKey) {
+    // 新增：根据反转状态生成索引序列
+    const idxs = rows.map((_, i) => i);
+    if (reverseX) idxs.reverse();
+    chartIndexMap = idxs;
+
+    const labels = idxs.map(i => wrap2Lines(toLabel(rows[i][xKey])));
+    const data = idxs.map(i => {
+      const v = rows[i][yKey];
+      const n = typeof v === 'string' ? parseFloat(v) : v;
+      return isFinite(n) ? n : null;
+    });
+
+    // 基于数据自动收紧 Y 轴范围（5% padding），忽略 null
+    const nums = data.filter(v => v != null && isFinite(v));
+    let yMin = Math.min(...nums), yMax = Math.max(...nums);
+    if (!isFinite(yMin) || !isFinite(yMax)) { yMin = 0; yMax = 1; }
+    if (yMin === yMax) { // 避免零范围
+      const eps = Math.abs(yMin || 1) * 0.05;
+      yMin = yMin - eps;
+      yMax = yMax + eps;
+    } else {
+      const pad = (yMax - yMin) * 0.05;
+      yMin -= pad; yMax += pad;
+    }
+
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    chartInstance = new Chart(chartEl.getContext('2d'), {
+      type: (timeKeyRe.test(xKey) || rows.some(r => isNum(r[xKey]) || isISO(r[xKey]))) ? 'line' : 'bar',
+      data: { labels, datasets: [{ label: getLabel(yKey), data, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.15)', tension: 0.25, pointRadius: 0 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        // 新增：更友好的交互模式
+        interaction: { mode: 'index', intersect: false },
+        // 新增：hover 时更新“当前点”
+        onHover: (evt, activeEls) => {
+          if (activeEls && activeEls.length) updateHovered(activeEls[0].index);
+          else chartPoint.textContent = '';
+        },
+        scales: {
+          y: {
+            suggestedMin: yMin,
+            suggestedMax: yMax,
+            ticks: { callback: (v) => fmtNum(v) }
+          },
+          x: { ticks: { maxRotation: 0, minRotation: 0, autoSkip: true, autoSkipPadding: 12 } }
+        },
+        // 新增：自定义 tooltip 的标题与数值格式
+        plugins: {
+          legend: { display: true },
+          tooltip: {
+            enabled: true,
+            callbacks: {
+              title: (items) => {
+                const idx = items?.[0]?.dataIndex ?? -1;
+                const rowIndex = (chartIndexMap && chartIndexMap[idx] != null) ? chartIndexMap[idx] : idx;
+                if (rowIndex < 0 || !currentRows.length) return '';
+                return fmtX(currentRows[rowIndex][currentXKey]);
+              },
+              label: (item) => `${getLabel(currentYKey)}: ${fmtNum(item.raw)}`
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function setupChart(rows) {
+    if (!rows || rows.length === 0) { chartWrap.hidden = true; chartControls.hidden = true; return; }
+    const { cols, numeric, timeCandidates } = detectCols(rows);
+    if (numeric.length === 0) { chartWrap.hidden = true; chartControls.hidden = true; return; }
+    const xDefault = timeCandidates[0] || cols[0];
+    const yDefault = numeric.find(c => c !== xDefault) || numeric[0];
+
+    fillSelect(chartX, cols, xDefault);
+    fillSelect(chartY, numeric, yDefault);
+
+    chartControls.hidden = false;
+    chartWrap.hidden = false;
+    chartCount.textContent = `数据点：${rows.length}`;
+
+    currentRows = rows;
+    currentXKey = chartX.value;
+    currentYKey = chartY.value;
+
+    updateReverseBtn();
+    buildChart(rows, chartX.value, chartY.value);
+
+    chartX.onchange = () => {
+      currentXKey = chartX.value;
+      buildChart(rows, chartX.value, chartY.value);
+      chartPoint.textContent = '';
+    };
+    chartY.onchange = () => {
+      currentYKey = chartY.value;
+      buildChart(rows, chartX.value, chartY.value);
+      chartPoint.textContent = '';
+    };
+
+    // 新增：绑定反转按钮
+    toggleReverse.onclick = () => {
+      reverseX = !reverseX;
+      updateReverseBtn();
+      buildChart(currentRows, currentXKey, currentYKey);
+      chartPoint.textContent = '';
+    };
+  }
+
+  function getBase() {
+    let base = (apiBase.value || '').trim();
+    if (!base) return '';
+    // 去掉尾部斜杠
+    if (base.endsWith('/')) base = base.slice(0, -1);
+    return base;
+  }
+
+  function buildUrl() {
+    const t = table.value;
+    const params = new URLSearchParams();
+    if (from.value) params.set('from', from.value);
+    if (to.value) params.set('to', to.value);
+    if (order.value) params.set('order', order.value);
+    if (limit.value) params.set('limit', limit.value);
+    if (offset.value) params.set('offset', offset.value);
+    if (t.startsWith('holders') && token.value) params.set('token', token.value);
+    if (t === 'holders' || t === 'holders_history') {
+      if (owner.value) params.set('owner', owner.value);
+    } else if (t === 'profiles') {
+      if (owner.value) params.set('address', owner.value);
+    }
+    const path = {
+      stats: '/api/stats',
+      stats_history: '/api/stats/history',
+      holders: '/api/holders',
+      holders_history: '/api/holders/history',
+      profiles: '/api/profiles',
+      watermarks: '/api/watermarks',
+    }[t];
+    const base = getBase();
+    return `${base}${path}?${params.toString()}`;
+  }
+
+  async function run() {
+    errorBox.hidden = true; errorBox.textContent = '';
+    summary.textContent = '查询中...';
+    thead.innerHTML = ''; tbody.innerHTML = '';
+    try {
+  const url = buildUrl();
+  const base = getBase();
+  if (!base) throw new Error('请先填写 API Base（你的 Worker API 域名）');
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '请求失败');
+      const rows = data.results || [];
+      summary.textContent = `count=${data.count} limit=${data.limit} offset=${data.offset} order=${data.order}`;
+      if (rows.length === 0) { tbody.innerHTML = '<tr><td class="muted">无数据</td></tr>'; chartWrap.hidden = true; chartControls.hidden = true; return; }
+      const cols = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
+      thead.innerHTML = '<tr>' + cols.map(c => `<th>${getLabel(c)}</th>`).join('') + '</tr>';
+      const esc = (v) => v == null ? '' : String(v).replace(/[&<>]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[s]));
+      tbody.innerHTML = rows.map(r => '<tr>' + cols.map(c => `<td>${esc(r[c])}</td>`).join('') + '</tr>').join('');
+
+      // 新增：绘制图表
+      setupChart(rows);
+    } catch (e) {
+      summary.textContent = '';
+      errorBox.hidden = false;
+      errorBox.textContent = e.message || String(e);
+      chartWrap.hidden = true; chartControls.hidden = true;
+      if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+      chartPoint.textContent = '';
+    }
+  }
+
+  runBtn.addEventListener('click', run);
+  clearBtn.addEventListener('click', () => {
+    tbody.innerHTML = ''; summary.textContent=''; errorBox.hidden = true;
+    chartWrap.hidden = true; chartControls.hidden = true;
+    chartPoint.textContent = '';
+    currentRows = []; currentXKey = ''; currentYKey = '';
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  });
+
+  // 记忆 API Base
+  (function initBase(){
+    const saved = localStorage.getItem('v2ex_hodl_api_base') || '';
+    if (saved) apiBase.value = saved;
+    apiBase.addEventListener('change', () => {
+      localStorage.setItem('v2ex_hodl_api_base', apiBase.value.trim());
+    });
+  })();
+
+  // 新增：本地时区格式化（YYYY-MM-DD HH:mm）
+  function pad2(n){ return String(n).padStart(2,'0'); }
+  function fmtLocal(d){
+    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  }
+</script>
+</body>
+</html>
