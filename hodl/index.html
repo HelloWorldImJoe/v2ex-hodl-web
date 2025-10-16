@@ -52,10 +52,6 @@
           <select id="table">
             <option value="stats">v2ex-solana数据(stats)</option>
             <option value="stats_history">v2ex-solana统计历史(stats_history)</option>
-            <option value="holders">$v2ex持有者(holders)</option>
-            <option value="holders_history">$v2ex持有者历史(holders_history)</option>
-            <option value="profiles">用户档案(profiles)</option>
-            <option value="watermarks">任务水位(watermarks)</option>
           </select>
         </label>
         <label>
@@ -65,14 +61,6 @@
         <label>
           结束时间
           <input id="to" type="text" placeholder="ISO 或 时间戳（秒/毫秒）" />
-        </label>
-        <label>
-          代币
-          <input id="token" type="text" placeholder="代币 Mint（仅 holders* 生效）" />
-        </label>
-        <label>
-          持有者/地址
-          <input id="owner" type="text" placeholder="持有者地址或 Profile 地址" />
         </label>
         <label>
           排序
@@ -92,7 +80,6 @@
         <button class="btn" id="run">查询</button>
         <button class="btn secondary" id="clear">清空结果</button>
       </div>
-      <div class="hint mt8">提示：holders* 仅在选择 holders/holders_history 时生效；profiles 使用 address 过滤 solana_address。</div>
       <div id="error" class="error mt12" hidden></div>
       <div id="summary" class="muted mt12"></div>
 
