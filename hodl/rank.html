@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>V2EX HODL 持仓排行榜</title>
+  <style>
+    :root { --fg:#0f172a; --muted:#64748b; --bg:#f8fafc; --card:#ffffff; --pri:#2563eb; }
+    * { box-sizing: border-box; }
+    body { margin:0; font:14px/1.6 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji"; color:var(--fg); background:var(--bg); }
+    header { display:flex; align-items:center; gap:12px; padding:16px 20px; background:var(--card); border-bottom:1px solid #e2e8f0; position:sticky; top:0; z-index:10; }
+    header img { width:36px; height:36px; border-radius:8px; }
+    header h1 { font-size:16px; margin:0; }
+    main { max-width: none; margin: 0 auto; padding: 0 20px; }
+    .card { min-height: calc(100vh - 68px); display:flex; flex-direction:column; }
+    .toolbar { display:flex; gap:10px; align-items:end; flex-wrap:wrap; }
+    label { font-weight:600; color:#334155; display:flex; flex-direction:column; gap:6px; }
+    input, select { height:34px; padding:0 10px; border:1px solid #cbd5e1; border-radius:8px; background:white; }
+    input[type="number"] { width:110px; }
+    input[type="text"] { width:300px; }
+    .btn { height:34px; padding:0 12px; border-radius:8px; border:1px solid var(--pri); color:white; background:var(--pri); cursor:pointer; }
+    .btn.secondary { background:white; color:var(--pri); }
+    .grid { width:100%; overflow:auto; flex:1; }
+    table { border-collapse:collapse; width:100%; }
+    th, td { padding:8px 10px; border-bottom:1px solid #eef2f7; white-space:nowrap; text-align:left; }
+    th { background:#f8fafc; position:sticky; top:0; z-index:1; }
+    .muted { color:var(--muted); }
+    .error { color:#b91c1c; }
+    .mt12 { margin-top:12px; }
+    .mt16 { margin-top:16px; }
+    .avatar { width:24px; height:24px; border-radius:50%; object-fit:cover; background:#e2e8f0; vertical-align:middle; }
+    .usercell { display:flex; align-items:center; gap:8px; }
+    .addr { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    /* 可选：不再需要 .chart-wrap 的样式，保留不影响功能 */
+  </style>
+</head>
+<body>
+  <header>
+    <img src="https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/30e0d3f6-6076-40f8-7abb-8a7676f83c00/public" alt="logo" />
+    <h1>V2EX HODL 持仓排行榜</h1>
+  </header>
+  <main>
+    <div class="card">
+      <div class="toolbar">
+        <label>
+          API 基础地址
+          <input id="apiBase" type="text" placeholder="例如：https://api.example.com" />
+        </label>
+        <label>
+          Token Mint
+          <input id="token" type="text" placeholder="必填：Token Mint 地址" value="9raUVuzeWUk53co63M4WXLWPWE4Xc6Lpn7RS9dnkpump"/>
+        </label>
+        </label>
+        <button class="btn" id="run">查询</button>
+        <button class="btn secondary" id="clear">清空结果</button>
+      </div>
+
+      <div id="error" class="error mt12" hidden></div>
+      <div id="summary" class="muted mt12"></div>
+
+      <div class="grid mt16">
+        <table id="grid"><thead></thead><tbody></tbody></table>
+      </div>
+
+      <!-- 新增：详情面板（点击行后显示该地址在时间段内的变化） -->
+      <div id="detail" class="mt16" hidden>
+        <div class="toolbar">
+          <div id="detailTitle" class="muted"></div>
+          <button class="btn secondary" id="detailClose">清空详情</button>
+        </div>
+        <div class="grid mt8">
+          <table id="detailGrid"><thead></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const el = (id) => document.getElementById(id);
+    const apiBase = el('apiBase');
+    const token = el('token');
+    const runBtn = el('run');
+    const clearBtn = el('clear');
+    const errorBox = el('error');
+    const summary = el('summary');
+    const thead = document.querySelector('#grid thead');
+    const tbody = document.querySelector('#grid tbody');
+
+    // 新增：详情面板引用
+    const detail = el('detail');
+    const detailTitle = el('detailTitle');
+    const detailClose = el('detailClose');
+    const dthead = document.querySelector('#detailGrid thead');
+    const dtbody = document.querySelector('#detailGrid tbody');
+
+    // 数字与百分比格式化（统一两位小数）
+    const nf = new Intl.NumberFormat('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const nfCompact = new Intl.NumberFormat('zh-CN', { notation: 'compact', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function fmtNum(n){ return nf.format(n ?? 0); }
+    function fmtCompact(n){ return nfCompact.format(n ?? 0); }
+    function fmtPct(p){
+      const v = Number(p);
+      if (!isFinite(v)) return '';
+      const val = Math.abs(v) <= 1 ? v * 100 : v;
+      return val.toFixed(2) + '%';
+    }
+    // 新增：排名变化格式化（保留两位小数并带符号）
+    function fmtDelta(v){
+      if (v === null || v === undefined) return '-';
+      const n = Number(v);
+      if (!isFinite(n)) return '-';
+      return (n > 0 ? '+' : '') + n.toFixed(2);
+    }
+    function esc(v){ return v == null ? '' : String(v).replace(/[&<>]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[s])); }
+    function shortAddr(a){ if(!a) return ''; return a.length > 12 ? a.slice(0,6) + '...' + a.slice(-4) : a; }
+    function getMysteryName(r){
+      const addr = (r?.owner_address || '').trim();
+      const head = addr.slice(0, 4);
+      return `神秘的${head}`;
+    }
+
+    // 修改：时间解析与本地格式化（优先将无时区的 'YYYY-MM-DD HH:mm[:ss]' 作为 UTC 解析）
+    function pad2(n){ return String(n).padStart(2,'0'); }
+    function fmtLocal(d){
+      return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+    }
+    function parseToDate(v){
+      if (v === null || v === undefined) return null;
+
+      // 数字：epoch 秒/毫秒
+      if (typeof v === 'number') {
+        const ms = v < 1e12 ? v * 1000 : v;
+        const d = new Date(ms);
+        return isNaN(d) ? null : d;
+      }
+
+      const s = String(v).trim();
+      if (!s) return null;
+
+      // 纯数字字符串：epoch 秒/毫秒
+      if (/^\d+$/.test(s)) {
+        const num = Number(s);
+        const ms = num < 1e12 ? num * 1000 : num;
+        const d = new Date(ms);
+        return isNaN(d) ? null : d;
+      }
+
+      // 优先：无时区的 'YYYY-MM-DD[ T]HH:mm[:ss]' 当作 UTC 解析
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+      if (m) {
+        const [, y, mo, d, h = '00', mi = '00', se = '00'] = m;
+        return new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +se));
+      }
+
+      // 其它可被原生识别的 ISO 字符串（含 Z/时区偏移）
+      const d = new Date(s);
+      return isNaN(d) ? null : d;
+    }
+    function toLocalStr(v){
+      const d = parseToDate(v);
+      return d ? fmtLocal(d) : (v ?? '');
+    }
+
+    // 新增：保存当前列表（用于行点击）
+    let currentList = [];
+
+    function getBase(){
+      let base = (apiBase.value || '').trim();
+      if (!base) return '';
+      if (base.endsWith('/')) base = base.slice(0,-1);
+      return base;
+    }
+
+    function buildUrl(){
+      const base = getBase();
+      const params = new URLSearchParams();
+      if (token.value) params.set('token', token.value.trim());
+      params.set('limit', '120');
+      params.set('order', 'hold_rank');
+      return `${base}/api/holders?${params.toString()}`;
+    }
+
+    // 合并：仅保留这一版历史接口（删除后面重复的 buildHistoryUrl 定义）
+    function buildHistoryUrl(ownerAddress){
+      const base = getBase();
+      const params = new URLSearchParams();
+      params.set('token', token.value.trim());
+      params.set('owner', ownerAddress);
+      params.set('order', 'asc');
+      params.set('limit', '1000');
+      params.set('offset', '0');
+      return `${base}/api/holders/history?${params.toString()}`;
+    }
+
+    function renderHistoryTable(rows){
+      if (!rows.length){
+        dthead.innerHTML = '';
+        dtbody.innerHTML = '<tr><td class="muted">此时间段内无变化</td></tr>';
+        return;
+      }
+      dthead.innerHTML = `
+        <tr>
+          <th>时间段</th>
+          <th>持币数量</th>
+          <th>占比</th>
+          <th>原始排名</th>
+          <th>排名变化</th>
+        </tr>`;
+      dtbody.innerHTML = rows.map(r => {
+        const period = `${esc(toLocalStr(r.start_checked_at))} ~ ${esc(toLocalStr(r.end_checked_at))}`;
+        const amt = fmtNum(+r.hold_amount || 0);
+        const pct = fmtPct(r.hold_percentage);
+        const rk = r.hold_rank == null ? '-' : String(r.hold_rank);
+        const delta = fmtDelta(r.rank_delta);
+        return `<tr>
+          <td>${period}</td>
+          <td>${amt}</td>
+          <td>${pct}</td>
+          <td>${rk}</td>
+          <td>${delta}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // 新增：渲染排行榜表格（头像+用户名同列，神秘用户不显示头像，本地时区时间）
+    function renderTable(rows){
+      if (!rows || !rows.length){
+        thead.innerHTML = '';
+        tbody.innerHTML = '<tr><td class="muted">无数据</td></tr>';
+        return;
+      }
+      thead.innerHTML = `
+        <tr>
+          <th>#</th>
+          <th>用户</th>
+          <th>钱包地址</th>
+          <th>持币数量</th>
+          <th>占比</th>
+          <th>原始排名</th>
+          <th>排名变化</th>
+          <th>更新时间</th>
+        </tr>`;
+      tbody.innerHTML = rows.map((r, i) => {
+        const isMystery = !r.v2ex_username;
+        const avatar = isMystery ? '' : (r.avatar_url ? `<img class="avatar" src="${esc(r.avatar_url)}" alt="" />` : `<span class="avatar"></span>`);
+        const uname = r.v2ex_username ? esc(r.v2ex_username) : esc(getMysteryName(r));
+        const addrFull = esc(r.owner_address || '');
+        const addrShort = shortAddr(r.owner_address || '');
+        const amt = fmtNum(+r.hold_amount || 0);
+        const pct = fmtPct(r.hold_percentage);
+        const rk = r.hold_rank == null ? '-' : String(r.hold_rank);
+        const delta = fmtDelta(r.rank_delta);
+        const t = esc(toLocalStr(r.checked_at) || '');
+        return `<tr data-idx="${i}">
+          <td>${i+1}</td>
+          <td><div class="usercell">${avatar}<span>${uname}</span></div></td>
+          <td class="addr" title="${addrFull}">${addrShort}</td>
+          <td>${amt}</td>
+          <td>${pct}</td>
+          <td>${rk}</td>
+          <td>${delta}</td>
+          <td>${t}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function loadHistory(ownerAddress, displayName){
+      if (!getBase()) { errorBox.hidden=false; errorBox.textContent='请先填写 API 基础地址'; return; }
+      if (!token.value.trim()) { errorBox.hidden=false; errorBox.textContent='请填写 Token Mint 地址'; return; }
+      if (!ownerAddress) { return; }
+      const short = shortAddr(ownerAddress);
+      // 修改：标题不再包含时间段
+      detail.hidden = false;
+      detailTitle.textContent = `用户：${displayName}（${short}） | 加载中...`;
+      dthead.innerHTML = ''; dtbody.innerHTML = '';
+
+      try{
+        const res = await fetch(buildHistoryUrl(ownerAddress));
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '历史数据请求失败');
+        renderHistoryTable(Array.isArray(data.results) ? data.results : []);
+        detailTitle.textContent = `用户：${displayName}（${short}）`;
+      }catch(e){
+        dtbody.innerHTML = '';
+        dthead.innerHTML = '';
+        detailTitle.textContent = `用户：${displayName}（${short}）`;
+        errorBox.hidden = false;
+        errorBox.textContent = e.message || String(e);
+      }
+    }
+
+    async function run(){
+      errorBox.hidden = true; errorBox.textContent = '';
+      summary.textContent = '查询中...';
+      thead.innerHTML = ''; tbody.innerHTML = '';
+      detail.hidden = true; dthead.innerHTML=''; dtbody.innerHTML='';
+      try{
+        const base = getBase();
+        if (!base) throw new Error('请先填写 API 基础地址');
+        if (!token.value.trim()) throw new Error('请填写 Token Mint 地址');
+
+        const url = buildUrl();
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '请求失败');
+
+        let rows = Array.isArray(data.results) ? data.results : [];
+        currentList = rows;
+
+        summary.textContent = `仅展示排名前${data.count}的持币者`;
+        renderTable(rows);
+      }catch(e){
+        summary.textContent = '';
+        errorBox.hidden = false;
+        errorBox.textContent = e.message || String(e);
+        renderTable([]);
+      }
+    }
+
+    runBtn.addEventListener('click', run);
+    clearBtn.addEventListener('click', ()=>{
+      tbody.innerHTML = ''; thead.innerHTML = ''; summary.textContent=''; errorBox.hidden=true;
+      currentList = [];
+      detail.hidden = true; dthead.innerHTML=''; dtbody.innerHTML=''; detailTitle.textContent='';
+    });
+
+    // 新增：点击表格行，加载该地址历史
+    tbody.addEventListener('click', (e)=>{
+      const tr = e.target.closest('tr[data-idx]');
+      if (!tr) return;
+      const idx = Number(tr.dataset.idx);
+      const row = currentList[idx];
+      if (!row) return;
+      const displayName = row.v2ex_username ? row.v2ex_username : getMysteryName(row);
+      loadHistory(row.owner_address, displayName);
+    });
+
+    // 详情面板清空
+    detailClose.addEventListener('click', ()=>{
+      detail.hidden = true;
+      dthead.innerHTML = '';
+      dtbody.innerHTML = '';
+      detailTitle.textContent = '';
+    });
+
+    // 记忆 API Base
+    (function initBase(){
+      const saved = localStorage.getItem('v2ex_hodl_api_base') || '';
+      if (saved) apiBase.value = saved;
+      apiBase.addEventListener('change', ()=>{
+        localStorage.setItem('v2ex_hodl_api_base', apiBase.value.trim());
+      });
+    })();
+  </script>
+</body>
+</html>

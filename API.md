@@ -119,7 +119,8 @@
 		hold_amount: number,    // 规范化数量（amount / 10^decimals）
 		decimals: number,
 		hold_percentage: number,
-		checked_at: string      // UTC: YYYY-MM-DD HH:MM:SS
+		checked_at: string,      // UTC: YYYY-MM-DD HH:MM:SS
+		rank_delta: number | null
 	}>
 }
 ```
@@ -155,7 +156,8 @@
 		decimals: number,
 		hold_percentage: number,
 		start_checked_at: string, // UTC 时间
-		end_checked_at: string    // UTC 时间
+		end_checked_at: string,    // UTC 时间
+		rank_delta: number | null
 	}>
 }
 ```

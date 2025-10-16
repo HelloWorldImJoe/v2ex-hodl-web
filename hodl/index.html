@@ -56,11 +56,11 @@
         </label>
         <label>
           开始时间
-          <input id="from" type="text" placeholder="ISO 或 时间戳（秒/毫秒）" />
+          <input id="from" type="datetime-local" step="1" placeholder="选择开始时间" />
         </label>
         <label>
           结束时间
-          <input id="to" type="text" placeholder="ISO 或 时间戳（秒/毫秒）" />
+          <input id="to" type="datetime-local" step="1" placeholder="选择结束时间" />
         </label>
         <label>
           排序
@@ -207,6 +207,8 @@
     decimals: "小数位",
     hold_percentage: "持币占比",
     checked_at: "检查时间",
+    // 新增：排名变化
+    rank_delta: "排名变化",
 
     // v2exer_profile
     solana_address: "Solana 地址",
@@ -229,11 +231,15 @@
     if (selected && items.includes(selected)) select.value = selected;
   }
 
-  // 新增：数值格式化（K/M/B），兼容回退
-  const nfCompact = (Intl && Intl.NumberFormat) ? new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 2 }) : null;
+  // 数值格式化（统一两位小数）
+  const nfCompact = (Intl && Intl.NumberFormat)
+    ? new Intl.NumberFormat('zh-CN', { notation: 'compact', minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : null;
   function fmtNum(n) {
     if (!isFinite(n)) return '';
-    return nfCompact ? nfCompact.format(n) : String(Math.abs(n) >= 1000 ? (n/1000).toFixed(1) + 'K' : n);
+    return nfCompact
+      ? nfCompact.format(n)
+      : String(Math.abs(n) >= 1000 ? (n/1000).toFixed(2) + 'K' : Number(n).toFixed(2));
   }
 
   // 新增：将标签最多拆成两行（优先按空格；否则按长度切分）
@@ -394,19 +400,34 @@
     return base;
   }
 
+  // 新增：将 datetime-local 本地时间转为 ISO UTC 字符串
+  function getDateParamStr(inputEl){
+    const v = (inputEl?.value || '').trim();
+    if (!v) return '';
+    if (inputEl.type === 'datetime-local') {
+      const d = new Date(v);
+      if (!isNaN(d)) return d.toISOString();
+    }
+    const d2 = new Date(v);
+    if (!isNaN(d2)) return d2.toISOString();
+    return v;
+  }
+
   function buildUrl() {
     const t = table.value;
     const params = new URLSearchParams();
-    if (from.value) params.set('from', from.value);
-    if (to.value) params.set('to', to.value);
+    const fv = getDateParamStr(from);
+    const tv = getDateParamStr(to);
+    if (fv) params.set('from', fv);
+    if (tv) params.set('to', tv);
     if (order.value) params.set('order', order.value);
     if (limit.value) params.set('limit', limit.value);
     if (offset.value) params.set('offset', offset.value);
-    if (t.startsWith('holders') && token.value) params.set('token', token.value);
+    if (t.startsWith('holders') && token?.value) params.set('token', token.value);
     if (t === 'holders' || t === 'holders_history') {
-      if (owner.value) params.set('owner', owner.value);
+      if (owner?.value) params.set('owner', owner.value);
     } else if (t === 'profiles') {
-      if (owner.value) params.set('address', owner.value);
+      if (owner?.value) params.set('address', owner.value);
     }
     const path = {
       stats: '/api/stats',
