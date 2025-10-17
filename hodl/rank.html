@@ -105,7 +105,7 @@
     function fmtPct(p){
       const v = Number(p);
       if (!isFinite(v)) return '';
-      const val = Math.abs(v) <= 1 ? v * 100 : v;
+      const val = v;
       return val.toFixed(2) + '%';
     }
     // 新增：排名变化格式化（保留两位小数并带符号）
