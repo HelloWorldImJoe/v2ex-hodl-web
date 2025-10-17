@@ -31,6 +31,10 @@
     .avatar { width:24px; height:24px; border-radius:50%; object-fit:cover; background:#e2e8f0; vertical-align:middle; }
     .usercell { display:flex; align-items:center; gap:8px; }
     .addr { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .rank-up { color: #16a34a; }
+    .rank-down { color: #dc2626; }
+    .row-rank-up { background-color: #f0fdf4; }
+    .row-rank-down { background-color: #fef2f2; }
     /* 可选：不再需要 .chart-wrap 的样式，保留不影响功能 */
   </style>
 </head>
@@ -109,7 +113,14 @@
       if (v === null || v === undefined) return '-';
       const n = Number(v);
       if (!isFinite(n)) return '-';
-      return (n > 0 ? '+' : '') + n.toFixed(2);
+      
+      if (n > 0) {
+        return `<span class="rank-down">↓${n.toFixed(0)}</span>`;
+      } else if (n < 0) {
+        return `<span class="rank-up">↑${Math.abs(n).toFixed(0)}</span>`;
+      } else {
+        return '0';
+      }
     }
     function esc(v){ return v == null ? '' : String(v).replace(/[&<>]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[s])); }
     function shortAddr(a){ if(!a) return ''; return a.length > 12 ? a.slice(0,6) + '...' + a.slice(-4) : a; }
@@ -192,37 +203,6 @@
       return `${base}/api/holders/history?${params.toString()}`;
     }
 
-    function renderHistoryTable(rows){
-      if (!rows.length){
-        dthead.innerHTML = '';
-        dtbody.innerHTML = '<tr><td class="muted">暂无历史数据</td></tr>';
-        return;
-      }
-      dthead.innerHTML = `
-        <tr>
-          <th>日期</th>
-          <th>持币数量</th>
-          <th>占比</th>
-          <th>原始排名</th>
-          <th>排名变化</th>
-        </tr>`;
-      dtbody.innerHTML = rows.map(r => {
-        // /api/holders/history 按日聚合，使用 statistics_date (UTC: YYYY-MM-DD)
-        const dateStr = esc(r.statistics_date || '');
-        const amt = fmtNum(+r.hold_amount || 0);
-        const pct = fmtPct(r.hold_percentage);
-        const rk = r.hold_rank == null ? '-' : String(r.hold_rank);
-        const delta = fmtDelta(r.rank_delta);
-        return `<tr>
-          <td>${dateStr}</td>
-          <td>${amt}</td>
-          <td>${pct}</td>
-          <td>${rk}</td>
-          <td>${delta}</td>
-        </tr>`;
-      }).join('');
-    }
-
     // 新增：渲染排行榜表格（头像+用户名同列，神秘用户不显示头像，本地时区时间）
     function renderTable(rows){
       if (!rows || !rows.length){
@@ -252,7 +232,16 @@
         const rk = r.hold_rank == null ? '-' : String(r.hold_rank);
         const delta = fmtDelta(r.rank_delta);
         const t = esc(toLocalStr(r.checked_at) || '');
-        return `<tr data-idx="${i}">
+        
+        // 根据排名变化添加行样式
+        let rowClass = '';
+        const rankDelta = Number(r.rank_delta);
+        if (isFinite(rankDelta)) {
+          if (rankDelta > 0) rowClass = 'row-rank-up';
+          else if (rankDelta < 0) rowClass = 'row-rank-down';
+        }
+        
+        return `<tr data-idx="${i}" class="${rowClass}">
           <td>${i+1}</td>
           <td><div class="usercell">${avatar}<span>${uname}</span></div></td>
           <td class="addr" title="${addrFull}">${addrShort}</td>
@@ -261,6 +250,46 @@
           <td>${rk}</td>
           <td>${delta}</td>
           <td>${t}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function renderHistoryTable(rows){
+      if (!rows.length){
+        dthead.innerHTML = '';
+        dtbody.innerHTML = '<tr><td class="muted">暂无历史数据</td></tr>';
+        return;
+      }
+      dthead.innerHTML = `
+        <tr>
+          <th>日期</th>
+          <th>持币数量</th>
+          <th>占比</th>
+          <th>原始排名</th>
+          <th>排名变化</th>
+        </tr>`;
+      dtbody.innerHTML = rows.map(r => {
+        // /api/holders/history 按日聚合，使用 statistics_date (UTC: YYYY-MM-DD)
+        const dateStr = esc(r.statistics_date || '');
+        const amt = fmtNum(+r.hold_amount || 0);
+        const pct = fmtPct(r.hold_percentage);
+        const rk = r.hold_rank == null ? '-' : String(r.hold_rank);
+        const delta = fmtDelta(r.rank_delta);
+        
+        // 根据排名变化添加行样式
+        let rowClass = '';
+        const rankDelta = Number(r.rank_delta);
+        if (isFinite(rankDelta)) {
+          if (rankDelta > 0) rowClass = 'row-rank-up';
+          else if (rankDelta < 0) rowClass = 'row-rank-down';
+        }
+        
+        return `<tr class="${rowClass}">
+          <td>${dateStr}</td>
+          <td>${amt}</td>
+          <td>${pct}</td>
+          <td>${rk}</td>
+          <td>${delta}</td>
         </tr>`;
       }).join('');
     }
