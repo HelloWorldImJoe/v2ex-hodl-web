@@ -203,6 +203,14 @@
       return `${base}/api/holders/history?${params.toString()}`;
     }
 
+    // 新增：持币数量紧凑格式（>= 1,000,000 用 M；>= 1,000 用 k；否则用千分位）
+    function fmtAmount(n){
+      const v = Number(n) || 0;
+      if (v >= 1_000_000) return (v / 1_000_000).toFixed(2).replace(/\.00$/, '') + 'M';
+      if (v >= 1_000) return (v / 1_000).toFixed(2).replace(/\.00$/, '') + 'k';
+      return fmtNum(v);
+    }
+
     // 新增：渲染排行榜表格（头像+用户名同列，神秘用户不显示头像，本地时区时间）
     function renderTable(rows){
       if (!rows || !rows.length){
@@ -227,7 +235,7 @@
         const uname = r.v2ex_username ? esc(r.v2ex_username) : esc(getMysteryName(r));
         const addrFull = esc(r.owner_address || '');
         const addrShort = shortAddr(r.owner_address || '');
-        const amt = fmtNum(+r.hold_amount || 0);
+        const amt = fmtAmount(+r.hold_amount || 0);
         const pct = fmtPct(r.hold_percentage);
         const rk = r.hold_rank == null ? '-' : String(r.hold_rank);
         const delta = fmtDelta(r.rank_delta);
@@ -245,7 +253,7 @@
           <td>${i+1}</td>
           <td><div class="usercell">${avatar}<span>${uname}</span></div></td>
           <td class="addr" title="${addrFull}">${addrShort}</td>
-          <td>${amt}</td>
+          <td title="${fmtNum(+r.hold_amount || 0)}">${amt}</td>
           <td>${pct}</td>
           <td>${rk}</td>
           <td>${delta}</td>
@@ -271,7 +279,7 @@
       dtbody.innerHTML = rows.map(r => {
         // /api/holders/history 按日聚合，使用 statistics_date (UTC: YYYY-MM-DD)
         const dateStr = esc(r.statistics_date || '');
-        const amt = fmtNum(+r.hold_amount || 0);
+        const amt = fmtAmount(+r.hold_amount || 0);
         const pct = fmtPct(r.hold_percentage);
         const rk = r.hold_rank == null ? '-' : String(r.hold_rank);
         const delta = fmtDelta(r.rank_delta);
@@ -286,7 +294,7 @@
         
         return `<tr class="${rowClass}">
           <td>${dateStr}</td>
-          <td>${amt}</td>
+          <td title="${fmtNum(+r.hold_amount || 0)}">${amt}</td>
           <td>${pct}</td>
           <td>${rk}</td>
           <td>${delta}</td>
