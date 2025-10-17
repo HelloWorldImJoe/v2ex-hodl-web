@@ -176,6 +176,7 @@
       const params = new URLSearchParams();
       if (token.value) params.set('token', token.value.trim());
       params.set('limit', '120');
+      params.set('order', 'ASC');
       return `${base}/api/holders?${params.toString()}`;
     }
 
