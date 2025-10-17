@@ -35,7 +35,42 @@
     .rank-down { color: #dc2626; }
     .row-rank-up { background-color: #f0fdf4; }
     .row-rank-down { background-color: #fef2f2; }
-    /* 可选：不再需要 .chart-wrap 的样式，保留不影响功能 */
+    /* 新增：右侧侧边栏与遮罩 */
+    .side-mask {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.4);
+      backdrop-filter: saturate(120%) blur(2px);
+      z-index: 998;
+    }
+    .side-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      height: 100%;
+      width: min(92vw, 560px);
+      background: var(--card);
+      box-shadow: -2px 0 12px rgba(2, 6, 23, 0.08);
+      transform: translateX(100%);
+      transition: transform 0.24s ease;
+      z-index: 999;
+      display: flex;
+      flex-direction: column;
+    }
+    .side-panel.open { transform: translateX(0); }
+    .side-panel .toolbar {
+      position: sticky;
+      top: 0;
+      background: var(--card);
+      z-index: 2;
+      padding: 16px 20px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -66,7 +101,8 @@
         <table id="grid"><thead></thead><tbody></tbody></table>
       </div>
 
-      <!-- 新增：详情面板（点击行后显示该地址在时间段内的变化） -->
+      <!-- 删除：原内联详情面板 -->
+      <!--
       <div id="detail" class="mt16" hidden>
         <div class="toolbar">
           <div id="detailTitle" class="muted"></div>
@@ -76,6 +112,19 @@
           <table id="detailGrid"><thead></thead><tbody></tbody></table>
         </div>
       </div>
+      -->
+
+      <!-- 新增：右侧侧边栏与遮罩 -->
+      <div id="sideMask" class="side-mask" hidden></div>
+      <aside id="detail" class="side-panel" aria-hidden="true">
+        <div class="toolbar">
+          <div id="detailTitle" class="muted"></div>
+          <button class="btn secondary" id="detailClose">关闭</button>
+        </div>
+        <div class="grid mt8">
+          <table id="detailGrid"><thead></thead><tbody></tbody></table>
+        </div>
+      </aside>
     </div>
   </main>
 
@@ -96,6 +145,26 @@
     const detailClose = el('detailClose');
     const dthead = document.querySelector('#detailGrid thead');
     const dtbody = document.querySelector('#detailGrid tbody');
+
+    // 新增：遮罩引用
+    const sideMask = el('sideMask');
+
+    // 新增：侧边栏开关
+    function openSide(){
+      detail.classList.add('open');
+      detail.setAttribute('aria-hidden', 'false');
+      sideMask.hidden = false;
+      document.body.style.overflow = 'hidden';
+    }
+    function closeSide(){
+      detail.classList.remove('open');
+      detail.setAttribute('aria-hidden', 'true');
+      sideMask.hidden = true;
+      document.body.style.overflow = '';
+      dthead.innerHTML = '';
+      dtbody.innerHTML = '';
+      detailTitle.textContent = '';
+    }
 
     // 数字与百分比格式化（统一两位小数）
     const nf = new Intl.NumberFormat('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -197,8 +266,8 @@
       const params = new URLSearchParams();
       params.set('token', token.value.trim());
       params.set('owner', ownerAddress);
-      params.set('order', 'asc');
-      params.set('limit', '1000');
+      params.set('order', 'desc');
+      params.set('limit', '30');
       params.set('offset', '0');
       return `${base}/api/holders/history?${params.toString()}`;
     }
@@ -307,10 +376,10 @@
       if (!token.value.trim()) { errorBox.hidden=false; errorBox.textContent='请填写 Token Mint 地址'; return; }
       if (!ownerAddress) { return; }
       const short = shortAddr(ownerAddress);
-      // 修改：标题不再包含时间段
-      detail.hidden = false;
+      // 修改：打开侧边栏并设置标题
       detailTitle.textContent = `用户：${displayName}（${short}） | 加载中...`;
       dthead.innerHTML = ''; dtbody.innerHTML = '';
+      openSide();
 
       try{
         const res = await fetch(buildHistoryUrl(ownerAddress));
@@ -319,8 +388,8 @@
         renderHistoryTable(Array.isArray(data.results) ? data.results : []);
         detailTitle.textContent = `用户：${displayName}（${short}）`;
       }catch(e){
-        dtbody.innerHTML = '';
         dthead.innerHTML = '';
+        dtbody.innerHTML = '';
         detailTitle.textContent = `用户：${displayName}（${short}）`;
         errorBox.hidden = false;
         errorBox.textContent = e.message || String(e);
@@ -331,7 +400,8 @@
       errorBox.hidden = true; errorBox.textContent = '';
       summary.textContent = '查询中...';
       thead.innerHTML = ''; tbody.innerHTML = '';
-      detail.hidden = true; dthead.innerHTML=''; dtbody.innerHTML='';
+      // 修改：新查询前关闭侧边栏
+      closeSide();
       try{
         const base = getBase();
         if (!base) throw new Error('请先填写 API 基础地址');
@@ -359,10 +429,11 @@
     clearBtn.addEventListener('click', ()=>{
       tbody.innerHTML = ''; thead.innerHTML = ''; summary.textContent=''; errorBox.hidden=true;
       currentList = [];
-      detail.hidden = true; dthead.innerHTML=''; dtbody.innerHTML=''; detailTitle.textContent='';
+      // 修改：清空时关闭侧边栏
+      closeSide();
     });
 
-    // 新增：点击表格行，加载该地址历史
+    // 新增：点击表格行显示侧边栏（原逻辑保留）
     tbody.addEventListener('click', (e)=>{
       const tr = e.target.closest('tr[data-idx]');
       if (!tr) return;
@@ -373,12 +444,15 @@
       loadHistory(row.owner_address, displayName);
     });
 
-    // 详情面板清空
+    // 修改：关闭按钮关闭侧边栏
     detailClose.addEventListener('click', ()=>{
-      detail.hidden = true;
-      dthead.innerHTML = '';
-      dtbody.innerHTML = '';
-      detailTitle.textContent = '';
+      closeSide();
+    });
+
+    // 新增：点击遮罩或按 ESC 关闭
+    sideMask.addEventListener('click', closeSide);
+    window.addEventListener('keydown', (e)=>{
+      if (e.key === 'Escape') closeSide();
     });
 
     // 记忆 API Base
