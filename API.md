@@ -18,10 +18,10 @@
 ## 1) 统计快照：原始表 v2ex_hodl
 
 - 路径：`GET /api/stats`
-- 排序列：`statistics_timestamp`（默认 `order=desc`）
+- 排序列：`created_at`（默认 `order=desc`）
 - 查询参数：
-	- `from`：过滤 `statistics_timestamp >= from`
-	- `to`：过滤 `statistics_timestamp <= to`
+	- `from`：过滤 `created_at >= from`
+	- `to`：过滤 `created_at <= to`
 	- `order`：`asc|desc`（默认 `desc`）
 	- `limit`、`offset`
 - 成功响应：
@@ -43,7 +43,7 @@
 		total_sol_tip_amount: number,
 		v2ex_token_tip_count: number,
 		total_v2ex_token_tip_amount: number,
-		statistics_timestamp: number  // epoch 秒
+	created_at: string  // UTC 文本 "YYYY-MM-DD HH:MM:SS"
 	}>
 }
 ```
@@ -58,10 +58,10 @@
 - `GET /api/stats/history`：要求至少提供 `from` 或 `to`（否则 400）。
 - `GET /api/history`：`from`/`to` 可选；不提供时返回最新的若干区间片段。
 
-- 排序列：`end_timestamp`（默认 `order=desc`）
+- 排序列：`statistics_date`（默认 `order=desc`）
 - 查询参数：
-	- `from`：区间交集过滤，按 `end_timestamp >= from`
-	- `to`：区间交集过滤，按 `start_timestamp <= to`
+	- `from`：日期范围过滤，按 `statistics_date >= from`
+	- `to`：日期范围过滤，按 `statistics_date <= to`
 	- `order`、`limit`（两个路径均不支持 `offset`，与实现一致）
 - 成功响应：
 ```
@@ -83,8 +83,7 @@
 		total_sol_tip_amount: number,
 		v2ex_token_tip_count: number,
 		total_v2ex_token_tip_amount: number,
-		start_timestamp: number, // epoch 秒
-		end_timestamp: number    // epoch 秒
+	statistics_date: string  // UTC 文本 YYYY-MM-DD
 	}>
 }
 ```
@@ -130,11 +129,11 @@
 ## 4) Token 持仓历史：v2exer_solana_address_history
 
 - 路径：`GET /api/holders/history`
-- 排序列：`end_checked_at`（默认 `order=desc`）
+- 排序列：`statistics_date`（默认 `order=desc`）
 - 查询参数：
 	- `token`、`owner`
-	- `from`：区间交集过滤，按 `end_checked_at >= from`
-	- `to`：区间交集过滤，按 `start_checked_at <= to`
+	- `from`：日期范围过滤，按 `statistics_date >= from`
+	- `to`：日期范围过滤，按 `statistics_date <= to`
 	- `order`、`limit`、`offset`
 - 成功响应：
 ```
@@ -154,10 +153,9 @@
 		hold_rank: number | null,
 		hold_amount: number,
 		decimals: number,
-		hold_percentage: number,
-		start_checked_at: string, // UTC 时间
-		end_checked_at: string,    // UTC 时间
-		rank_delta: number | null
+	hold_percentage: number,
+	statistics_date: string, // UTC 文本 YYYY-MM-DD
+	rank_delta: number | null
 	}>
 }
 ```
@@ -245,7 +243,8 @@
 
 - from/to 校验：当提供 `from`/`to` 时，若解析失败将返回 `400`。
 - 时间单位：
-	- v2ex_hodl / v2ex_hodl_history 使用 epoch 秒（整数）。
+	- v2ex_hodl 的时间列为 UTC 文本（`YYYY-MM-DD HH:MM:SS`）。
+	- v2ex_hodl_history 的时间列为按日 UTC 文本（`YYYY-MM-DD`）。
 	- 其余表的时间列为 UTC 文本（`YYYY-MM-DD HH:MM:SS`）。
 - 返回字段：遵循数据库列名；可能会随着迁移脚本演化而扩展，但不会在同一主版本中移除已有字段。
 
