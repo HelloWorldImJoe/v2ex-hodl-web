@@ -151,31 +151,69 @@
   let chartIndexMap = [];
 
   // 新增：工具函数
-  const timeKeyRe = /(time|date|ts|timestamp|created|updated|block)/i;
+  // 显式时间字段列表：仅这些字段按时间处理
+  const TIME_FIELDS = [
+    'statistics_timestamp',
+    'start_timestamp',
+    'end_timestamp',
+    'checked_at',
+    'created_at',
+    'updated_at',
+    'start_checked_at',
+    'end_checked_at',
+    'last_processed_at',
+    'block_time',
+    'block_timestamp',
+    'statistics_date'
+  ];
   function isNum(v) { return typeof v === 'number' && isFinite(v); }
   function isISO(s) { return typeof s === 'string' && !isNaN(Date.parse(s)); }
-  function toLabel(x) {
-    if (isNum(x)) {
-      let ms = x;
-      if (x < 1e11) ms = x * 1000; // 视为秒
+  // 与 rank/index.html 对齐的时间解析与本地化
+  function pad2(n){ return String(n).padStart(2,'0'); }
+  function fmtLocal(d){
+    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  }
+  function parseToDate(v){
+    if (v === null || v === undefined) return null;
+    if (typeof v === 'number') {
+      const ms = v < 1e12 ? v * 1000 : v;
       const d = new Date(ms);
-      if (!isNaN(d)) return fmtLocal(d);
-    } else if (isISO(x)) {
-      const d = new Date(x);
-      if (!isNaN(d)) return fmtLocal(d);
+      return isNaN(d) ? null : d;
+    }
+    const s = String(v).trim();
+    if (!s) return null;
+    if (/^\d+$/.test(s)) {
+      const num = Number(s);
+      const ms = num < 1e12 ? num * 1000 : num;
+      const d = new Date(ms);
+      return isNaN(d) ? null : d;
+    }
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (m) {
+      const [, y, mo, d, h = '00', mi = '00', se = '00'] = m;
+      return new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +se));
+    }
+    const d = new Date(s);
+    return isNaN(d) ? null : d;
+  }
+  function toLocalStr(v){
+    const d = parseToDate(v);
+    return d ? fmtLocal(d) : (v ?? '');
+  }
+  function toLabel(x, key) {
+    // 仅日期字符串保持原样展示
+    if (typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x)) return x;
+    // 只有当列名在时间字段数组内，才按时间格式化
+    if (TIME_FIELDS.includes(String(key || ''))) {
+      const d = parseToDate(x);
+      if (d) return fmtLocal(d);
     }
     return String(x ?? '');
   }
   function detectCols(rows) {
     const cols = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
     const numeric = cols.filter(c => rows.some(r => isNum(r[c]) || (!isNaN(parseFloat(r[c])) && r[c] !== null && r[c] !== '')));
-    const timeCandidates = cols.filter(c => {
-      if (timeKeyRe.test(c)) return true;
-      return rows.some(r => {
-        const v = r[c];
-        return (isNum(v) && (v > 1e9)) || isISO(v);
-      });
-    });
+    const timeCandidates = cols.filter(c => TIME_FIELDS.includes(c));
     return { cols, numeric, timeCandidates };
   }
 
@@ -273,7 +311,7 @@
   }
 
   // 新增：格式化 X（用于显示，不换行）
-  function fmtX(x) { return toLabel(x); }
+  function fmtX(x, key) { return toLabel(x, key); }
 
   // 修改：更新 hover 点信息，使用索引映射
   function updateHovered(idx) {
@@ -283,7 +321,7 @@
       return;
     }
     const r = currentRows[rowIndex];
-    const xv = fmtX(r[currentXKey]);
+    const xv = fmtX(r[currentXKey], currentXKey);
     const yvRaw = r[currentYKey];
     const yvNum = typeof yvRaw === 'string' ? parseFloat(yvRaw) : yvRaw;
     chartPoint.textContent = `当前点：${getLabel(currentXKey)}=${xv}，${getLabel(currentYKey)}=${fmtNum(yvNum)}`;
@@ -295,7 +333,7 @@
     if (reverseX) idxs.reverse();
     chartIndexMap = idxs;
 
-    const labels = idxs.map(i => wrap2Lines(toLabel(rows[i][xKey])));
+  const labels = idxs.map(i => wrap2Lines(toLabel(rows[i][xKey], xKey)));
     const data = idxs.map(i => {
       const v = rows[i][yKey];
       const n = typeof v === 'string' ? parseFloat(v) : v;
@@ -317,7 +355,8 @@
 
     if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
     chartInstance = new Chart(chartEl.getContext('2d'), {
-      type: (timeKeyRe.test(xKey) || rows.some(r => isNum(r[xKey]) || isISO(r[xKey]))) ? 'line' : 'bar',
+      // 仅当列名在时间字段数组中时使用折线图，否则用柱状图
+      type: (TIME_FIELDS.includes(xKey)) ? 'line' : 'bar',
       data: { labels, datasets: [{ label: getLabel(yKey), data, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.15)', tension: 0.25, pointRadius: 0 }] },
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -346,7 +385,7 @@
                 const idx = items?.[0]?.dataIndex ?? -1;
                 const rowIndex = (chartIndexMap && chartIndexMap[idx] != null) ? chartIndexMap[idx] : idx;
                 if (rowIndex < 0 || !currentRows.length) return '';
-                return fmtX(currentRows[rowIndex][currentXKey]);
+                return fmtX(currentRows[rowIndex][currentXKey], currentXKey);
               },
               label: (item) => `${getLabel(currentYKey)}: ${fmtNum(item.raw)}`
             }
@@ -463,7 +502,15 @@
       const cols = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
       thead.innerHTML = '<tr>' + cols.map(c => `<th>${getLabel(c)}</th>`).join('') + '</tr>';
       const esc = (v) => v == null ? '' : String(v).replace(/[&<>]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[s]));
-      tbody.innerHTML = rows.map(r => '<tr>' + cols.map(c => `<td>${esc(r[c])}</td>`).join('') + '</tr>').join('');
+      tbody.innerHTML = rows.map(r => '<tr>' + cols.map(c => {
+        const v = r[c];
+        const isDateOnly = typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+        // 仅日期(YYYY-MM-DD)保持原样；其它时间字段本地化
+        if (TIME_FIELDS.includes(c) && !isDateOnly) {
+          return `<td>${esc(toLocalStr(v))}</td>`;
+        }
+        return `<td>${esc(v)}</td>`;
+      }).join('') + '</tr>').join('');
 
       // 新增：绘制图表
       setupChart(rows);
@@ -495,11 +542,7 @@
     });
   })();
 
-  // 新增：本地时区格式化（YYYY-MM-DD HH:mm）
-  function pad2(n){ return String(n).padStart(2,'0'); }
-  function fmtLocal(d){
-    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-  }
+  // pad2 已在上方定义；fmtLocal 已更新为含秒版本
 </script>
 </body>
 </html>

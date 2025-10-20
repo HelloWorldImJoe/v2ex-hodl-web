@@ -275,9 +275,19 @@
     // 新增：持币数量紧凑格式（>= 1,000,000 用 M；>= 1,000 用 k；否则用千分位）
     function fmtAmount(n){
       const v = Number(n) || 0;
-      if (v >= 1_000_000) return (v / 1_000_000).toFixed(2).replace(/\.00$/, '') + 'M';
-      if (v >= 1_000) return (v / 1_000).toFixed(2).replace(/\.00$/, '') + 'k';
+      // 超过（含）100k 使用 M；否则 1k-100k 使用 k；<1k 不缩写
+      if (Math.abs(v) >= 100_000) return (v / 1_000_000).toFixed(2).replace(/\.00$/, '') + 'M';
+      if (Math.abs(v) >= 1_000) return (v / 1_000).toFixed(2).replace(/\.00$/, '') + 'k';
       return fmtNum(v);
+    }
+    // 新增：数量变化采用与持币数量一致的显示规则，保留正负号，<1000 不缩写
+    function fmtAmountSigned(n){
+      if (n === null || n === undefined || n === '') return '-';
+      const v = Number(n);
+      if (!isFinite(v)) return '-';
+      const sign = v > 0 ? '+' : (v < 0 ? '-' : '');
+      const abs = Math.abs(v);
+      return sign + fmtAmount(abs);
     }
 
     // 新增：渲染排行榜表格（头像+用户名同列，神秘用户不显示头像，本地时区时间）
@@ -309,16 +319,23 @@
         const pct = fmtPct(r.hold_percentage);
         const rk = r.hold_rank == null ? '-' : String(r.hold_rank);
         const delta = fmtDelta(r.rank_delta);
-        const amtDelta = fmtDelta(r.amount_delta);
+        const amtDelta = fmtAmountSigned(r.amount_delta);
         const t = esc(toLocalStr(r.checked_at) || '');
         
         // 根据排名变化添加行样式
         let rowClass = '';
         const rankDelta = Number(r.rank_delta);
-        if (isFinite(rankDelta)) {
-          if (rankDelta > 0) rowClass = 'row-rank-up';
-          else if (rankDelta < 0) rowClass = 'row-rank-down';
+        const amountDelta = Number(r.amount_delta);
+        if (isFinite(rankDelta) && rankDelta !== 0) {
+          rowClass = rankDelta > 0 ? 'row-rank-up' : 'row-rank-down';
+        } else if (isFinite(amountDelta) && amountDelta !== 0) {
+          // 排名无变化时，退回用数量变化决定整行背景
+          rowClass = amountDelta > 0 ? 'row-rank-up' : 'row-rank-down';
         }
+
+        // 两列的背景色各自独立：>0 绿，<0 红
+        const rankCellClass = isFinite(rankDelta) && rankDelta !== 0 ? (rankDelta > 0 ? 'row-rank-up' : 'row-rank-down') : '';
+        const amountCellClass = isFinite(amountDelta) && amountDelta !== 0 ? (amountDelta > 0 ? 'row-rank-up' : 'row-rank-down') : '';
         
         return `<tr data-idx="${i}" class="${rowClass}">
           <td>${i+1}</td>
@@ -327,8 +344,8 @@
           <td title="${fmtNum(+r.hold_amount || 0)}">${amt}</td>
           <td>${pct}</td>
           <td>${rk}</td>
-          <td>${delta}</td>
-          <td>${amtDelta}</td>
+          <td class="${rankCellClass}">${delta}</td>
+          <td class="${amountCellClass}" title="${esc((()=>{ const v=Number(r.amount_delta); if(!isFinite(v)) return ''; const s=v>0?'+':(v<0?'-':''); return s + fmtNum(Math.abs(v));})())}">${amtDelta}</td>
           <td>${t}</td>
         </tr>`;
       }).join('');
@@ -356,23 +373,28 @@
         const pct = fmtPct(r.hold_percentage);
         const rk = r.hold_rank == null ? '-' : String(r.hold_rank);
         const delta = fmtDelta(r.rank_delta);
-        const amtDelta = fmtDelta(r.amount_delta);
+        const amtDelta = fmtAmountSigned(r.amount_delta);
         
         // 根据排名变化添加行样式
         let rowClass = '';
         const rankDelta = Number(r.rank_delta);
-        if (isFinite(rankDelta)) {
-          if (rankDelta > 0) rowClass = 'row-rank-up';
-          else if (rankDelta < 0) rowClass = 'row-rank-down';
+        const amountDelta = Number(r.amount_delta);
+        if (isFinite(rankDelta) && rankDelta !== 0) {
+          rowClass = rankDelta > 0 ? 'row-rank-up' : 'row-rank-down';
+        } else if (isFinite(amountDelta) && amountDelta !== 0) {
+          rowClass = amountDelta > 0 ? 'row-rank-up' : 'row-rank-down';
         }
+
+        const rankCellClass = isFinite(rankDelta) && rankDelta !== 0 ? (rankDelta > 0 ? 'row-rank-up' : 'row-rank-down') : '';
+        const amountCellClass = isFinite(amountDelta) && amountDelta !== 0 ? (amountDelta > 0 ? 'row-rank-up' : 'row-rank-down') : '';
         
         return `<tr class="${rowClass}">
           <td>${dateStr}</td>
           <td title="${fmtNum(+r.hold_amount || 0)}">${amt}</td>
           <td>${pct}</td>
           <td>${rk}</td>
-          <td>${delta}</td>
-          <td>${amtDelta}</td>
+          <td class="${rankCellClass}">${delta}</td>
+          <td class="${amountCellClass}" title="${esc((()=>{ const v=Number(r.amount_delta); if(!isFinite(v)) return ''; const s=v>0?'+':(v<0?'-':''); return s + fmtNum(Math.abs(v));})())}">${amtDelta}</td>
         </tr>`;
       }).join('');
     }
