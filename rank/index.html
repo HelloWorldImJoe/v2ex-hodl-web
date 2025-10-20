@@ -296,6 +296,7 @@
           <th>占比</th>
           <th>原始排名</th>
           <th>排名变化</th>
+          <th>数量变化</th>
           <th>更新时间</th>
         </tr>`;
       tbody.innerHTML = rows.map((r, i) => {
@@ -308,6 +309,7 @@
         const pct = fmtPct(r.hold_percentage);
         const rk = r.hold_rank == null ? '-' : String(r.hold_rank);
         const delta = fmtDelta(r.rank_delta);
+        const amtDelta = fmtDelta(r.amount_delta);
         const t = esc(toLocalStr(r.checked_at) || '');
         
         // 根据排名变化添加行样式
@@ -326,6 +328,7 @@
           <td>${pct}</td>
           <td>${rk}</td>
           <td>${delta}</td>
+          <td>${amtDelta}</td>
           <td>${t}</td>
         </tr>`;
       }).join('');
@@ -344,6 +347,7 @@
           <th>占比</th>
           <th>原始排名</th>
           <th>排名变化</th>
+          <th>数量变化</th>
         </tr>`;
       dtbody.innerHTML = rows.map(r => {
         // /api/holders/history 按日聚合，使用 statistics_date (UTC: YYYY-MM-DD)
@@ -352,6 +356,7 @@
         const pct = fmtPct(r.hold_percentage);
         const rk = r.hold_rank == null ? '-' : String(r.hold_rank);
         const delta = fmtDelta(r.rank_delta);
+        const amtDelta = fmtDelta(r.amount_delta);
         
         // 根据排名变化添加行样式
         let rowClass = '';
@@ -367,6 +372,7 @@
           <td>${pct}</td>
           <td>${rk}</td>
           <td>${delta}</td>
+          <td>${amtDelta}</td>
         </tr>`;
       }).join('');
     }

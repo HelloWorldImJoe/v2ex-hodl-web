@@ -119,7 +119,8 @@
 		decimals: number,
 		hold_percentage: number,
 		checked_at: string,      // UTC: YYYY-MM-DD HH:MM:SS
-		rank_delta: number | null
+		rank_delta: number | null,
+		amount_delta: string | null // 相对上次抓取的数量变化（规范化十进制字符串），正数增加，负数减少
 	}>
 }
 ```
