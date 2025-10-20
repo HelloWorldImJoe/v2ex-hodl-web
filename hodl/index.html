@@ -147,7 +147,7 @@
   let currentXKey = '';
   let currentYKey = '';
   // 新增：X 轴是否反转与索引映射（图上索引 -> 原 rows 索引）
-  let reverseX = false;
+  let reverseX = true; // 默认 X 轴反序
   let chartIndexMap = [];
 
   // 新增：工具函数
@@ -214,7 +214,11 @@
     const cols = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
     const numeric = cols.filter(c => rows.some(r => isNum(r[c]) || (!isNaN(parseFloat(r[c])) && r[c] !== null && r[c] !== '')));
     const timeCandidates = cols.filter(c => TIME_FIELDS.includes(c));
-    return { cols, numeric, timeCandidates };
+    // 仅时间字段用于 X 轴，去掉 id
+    const xCandidates = timeCandidates.filter(c => c !== 'id');
+    // Y 轴仅数值，剔除所有时间相关字段与 id
+    const yCandidates = numeric.filter(c => !TIME_FIELDS.includes(c) && c !== 'id');
+    return { cols, numeric, timeCandidates, xCandidates, yCandidates };
   }
 
   // 新增：字段中文名映射与获取函数（请按需补充映射）
@@ -397,13 +401,14 @@
 
   function setupChart(rows) {
     if (!rows || rows.length === 0) { chartWrap.hidden = true; chartControls.hidden = true; return; }
-    const { cols, numeric, timeCandidates } = detectCols(rows);
-    if (numeric.length === 0) { chartWrap.hidden = true; chartControls.hidden = true; return; }
-    const xDefault = timeCandidates[0] || cols[0];
-    const yDefault = numeric.find(c => c !== xDefault) || numeric[0];
+    const { xCandidates, yCandidates } = detectCols(rows);
+    if (!xCandidates.length || !yCandidates.length) { chartWrap.hidden = true; chartControls.hidden = true; return; }
 
-    fillSelect(chartX, cols, xDefault);
-    fillSelect(chartY, numeric, yDefault);
+    const xDefault = xCandidates[0];
+    const yDefault = yCandidates[0];
+
+    fillSelect(chartX, xCandidates, xDefault);
+    fillSelect(chartY, yCandidates, yDefault);
 
     chartControls.hidden = false;
     chartWrap.hidden = false;
@@ -427,7 +432,6 @@
       chartPoint.textContent = '';
     };
 
-    // 新增：绑定反转按钮
     toggleReverse.onclick = () => {
       reverseX = !reverseX;
       updateReverseBtn();
