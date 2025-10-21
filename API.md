@@ -23,6 +23,11 @@
 	- `from`：过滤 `created_at >= from`
 	- `to`：过滤 `created_at <= to`
 	- `order`：`asc|desc`（默认 `desc`）
+	- `span`：按时间跨度做抽样，仅返回每个时间桶（跨度为 `span`）的一条记录。
+	  - 支持格式：纯数字（秒）或带单位：`ms`/`s`/`m`/`h`（如 `500ms`、`2s`、`3m`、`1h`）。
+	  - 当存在 `span` 时：会按 `created_at` 将记录分桶（以 `strftime('%s', created_at)/span` 取整），每桶仅保留一条。
+	  - 哪条被保留由 `order` 决定：`order=desc` 选每桶中时间最晚的一条；`order=asc` 选每桶中时间最早的一条。
+	  - 注意：`ms` 会被下取整到秒，最小 1 秒。
 	- `limit`、`offset`
 - 成功响应：
 ```
@@ -32,6 +37,7 @@
 	order: "asc" | "desc",
 	limit: number,
 	offset: number,
+	span: number | null, // 秒；仅当传入 span 时返回其秒值
 	results: Array<{
 		id: number,
 		hodl_10k_addresses_count: number,
@@ -48,7 +54,9 @@
 }
 ```
 
-示例：`/api/stats?from=2025-01-01&limit=100`
+示例：
+- `/api/stats?from=2025-01-01&limit=100`
+- `/api/stats?from=2025-01-01T10:31:00Z&to=2025-01-01T10:32:00Z&span=2s` —— 在该 60 秒窗口内按 2 秒取样，约返回 30 条（因每 2 秒选一个点）。
 
 ---
 
@@ -105,6 +113,31 @@
 	ok: true,
 	count: number,
 	order: "asc" | "desc",
+### 3.1) 导入/更新持仓快照（写入）
+
+- 路径：`POST /api/holders/update`
+- Content-Type：`application/json`
+- 请求体示例（与外部同步服务一致）：
+```
+{
+	"ok": true,
+	"token": "9raUVuzeWUk53co63M4WXLWPWE4Xc6Lpn7RS9dnkpump",
+	"count": 120,
+	"holders": [
+		{"address": "...", "owner": "...", "amount": 720000002000000, "decimals": 6, "rank": 1},
+		{"address": "...", "owner": "...", "amount": 41235560060988,  "decimals": 6, "rank": 2}
+	],
+	"totalSupplyBaseUnits": 1000000000000000 // 可选，若省略则默认按 1B * 10^decimals
+}
+```
+- 成功响应：`{ ok: true, token: string, holders: number, inserted: number }`
+- 说明：
+	- amount 为 base units（已按 decimals 放大后的整数），服务端不会再次放大。
+	- 服务端会根据 v2exer_profile 自动补充 `v2ex_username` 和 `avatar_url`。
+	- 支持 UPSERT，并对“掉出榜单”的记录做归档到 `v2exer_solana_address_removed`。
+
+---
+
 	limit: number,
 	offset: number,
 	results: Array<{

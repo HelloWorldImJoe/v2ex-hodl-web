@@ -54,6 +54,19 @@
             <option value="stats_history">v2ex-solana统计历史(stats_history)</option>
           </select>
         </label>
+        <label id="spanWrap" hidden>
+          取样跨度(span)
+          <select id="span">
+            <option value="">不取样</option>
+            <option value="1s">1s</option>
+            <option value="30s">30s</option>
+            <option value="1m">1m</option>
+            <option value="10m">10m</option>
+            <option value="30m">30m</option>
+            <option value="1h">1h</option>
+            <option value="6h">6h</option>
+          </select>
+        </label>
         <label>
           开始时间
           <input id="from" type="datetime-local" step="1" placeholder="选择开始时间" />
@@ -123,6 +136,8 @@
   const order = el('order');
   const limit = el('limit');
   const offset = el('offset');
+  const spanWrap = document.getElementById('spanWrap');
+  const spanSel = document.getElementById('span');
   const runBtn = el('run');
   const clearBtn = el('clear');
   const errorBox = el('error');
@@ -211,7 +226,10 @@
     return String(x ?? '');
   }
   function detectCols(rows) {
-    const cols = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
+    const colsRaw = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
+    // 隐藏字段列表：不在表格和图表中展示
+    const HIDDEN_FIELDS = new Set(['bucket', 'rn']);
+    const cols = colsRaw.filter(c => !HIDDEN_FIELDS.has(c));
     const numeric = cols.filter(c => rows.some(r => isNum(r[c]) || (!isNaN(parseFloat(r[c])) && r[c] !== null && r[c] !== '')));
     const timeCandidates = cols.filter(c => TIME_FIELDS.includes(c));
     // 仅时间字段用于 X 轴，去掉 id
@@ -471,6 +489,8 @@
     if (order.value) params.set('order', order.value);
     if (limit.value) params.set('limit', limit.value);
     if (offset.value) params.set('offset', offset.value);
+    // 仅 stats 支持 span
+    if (t === 'stats' && spanSel && spanSel.value) params.set('span', spanSel.value);
     if (t.startsWith('holders') && token?.value) params.set('token', token.value);
     if (t === 'holders' || t === 'holders_history') {
       if (owner?.value) params.set('owner', owner.value);
@@ -480,10 +500,6 @@
     const path = {
       stats: '/api/stats',
       stats_history: '/api/stats/history',
-      holders: '/api/holders',
-      holders_history: '/api/holders/history',
-      profiles: '/api/profiles',
-      watermarks: '/api/watermarks',
     }[t];
     const base = getBase();
     return `${base}${path}?${params.toString()}`;
@@ -503,7 +519,9 @@
       const rows = data.results || [];
       summary.textContent = `count=${data.count} limit=${data.limit} offset=${data.offset} order=${data.order}`;
       if (rows.length === 0) { tbody.innerHTML = '<tr><td class="muted">无数据</td></tr>'; chartWrap.hidden = true; chartControls.hidden = true; return; }
-      const cols = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
+      // 与 detectCols 的隐藏策略保持一致
+      const HIDDEN_FIELDS = new Set(['bucket', 'rn']);
+      const cols = Array.from(new Set(rows.flatMap(r => Object.keys(r)))).filter(c => !HIDDEN_FIELDS.has(c));
       thead.innerHTML = '<tr>' + cols.map(c => `<th>${getLabel(c)}</th>`).join('') + '</tr>';
       const esc = (v) => v == null ? '' : String(v).replace(/[&<>]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[s]));
       tbody.innerHTML = rows.map(r => '<tr>' + cols.map(c => {
@@ -544,6 +562,28 @@
     apiBase.addEventListener('change', () => {
       localStorage.setItem('v2ex_hodl_api_base', apiBase.value.trim());
     });
+  })();
+
+  // 初始化：根据所选数据表显示/隐藏 span 控件
+  function updateSpanVisibility(){
+    const show = table.value === 'stats';
+    spanWrap.hidden = !show;
+  }
+  updateSpanVisibility();
+  table.addEventListener('change', updateSpanVisibility);
+
+  // 初始化 span：支持从 URL 查询参数中读取 ?span=1m 之类的值
+  (function initSpanFromUrl(){
+    try {
+      const usp = new URLSearchParams(location.search || '');
+      const v = usp.get('span') || '';
+      if (v && spanSel && spanSel.querySelector(`option[value="${v}"]`)) {
+        spanSel.value = v;
+      } else if (spanSel) {
+        // 默认 1 分钟
+        spanSel.value = '1m';
+      }
+    } catch {}
   })();
 
   // pad2 已在上方定义；fmtLocal 已更新为含秒版本
