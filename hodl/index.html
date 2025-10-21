@@ -376,6 +376,17 @@
         const n = parseFloat(s);
         return isFinite(n) ? n : NaN;
       }
+      // 颜色工具：#rrggbb -> rgba(r,g,b,a)
+      function hexToRgba(hex, alpha) {
+        const m = String(hex).trim().match(/^#?([a-fA-F0-9]{6})$/);
+        if (!m) return hex;
+        const int = parseInt(m[1], 16);
+        const r = (int >> 16) & 255;
+        const g = (int >> 8) & 255;
+        const b = int & 255;
+        const a = Math.max(0, Math.min(1, alpha ?? 1));
+        return `rgba(${r}, ${g}, ${b}, ${a})`;
+      }
       // 与 rank/index.html 对齐的时间解析与本地化
       function pad2(n) {
         return String(n).padStart(2, "0");
@@ -648,34 +659,58 @@
             label: getLabel(yk),
             data,
             borderColor: color,
-            backgroundColor: color + "26", // 0x26 ≈ 15% 透明度
+            backgroundColor: hexToRgba(color, 0.15),
             tension: 0.25,
-            pointRadius: 2,
+            pointRadius: 1,
+            pointHoverRadius: 4,
+            pointHitRadius: 8,
+            pointBackgroundColor: hexToRgba(color, 0.25),
+            pointBorderColor: hexToRgba(color, 0.25),
+            pointBorderWidth: 0,
             spanGaps: true,
             fill: false,
           };
         });
 
-        // 基于数据自动收紧 Y 轴范围（5% padding），忽略 null
-        const allNums = datasets.flatMap((ds) =>
-          (ds.data || []).filter((v) => v != null && isFinite(v))
-        );
-        let yMin = Math.min(...allNums),
-          yMax = Math.max(...allNums);
-        if (!isFinite(yMin) || !isFinite(yMax)) {
-          yMin = 0;
-          yMax = 1;
-        }
-        if (yMin === yMax) {
-          // 避免零范围
-          const eps = Math.abs(yMin || 1) * 0.05;
-          yMin = yMin - eps;
-          yMax = yMax + eps;
-        } else {
-          const pad = (yMax - yMin) * 0.05;
-          yMin -= pad;
-          yMax += pad;
-        }
+        // 为每条曲线创建独立 Y 轴：各自 min/max，与单选时一致
+        const scales = {
+          x: {
+            ticks: {
+              maxRotation: 0,
+              minRotation: 0,
+              autoSkip: true,
+              autoSkipPadding: 12,
+            },
+          },
+        };
+        datasets.forEach((ds, idx) => {
+          const nums = (ds.data || []).filter((v) => v != null && isFinite(v));
+          let ymin = Math.min(...nums), ymax = Math.max(...nums);
+          if (!isFinite(ymin) || !isFinite(ymax)) {
+            ymin = 0;
+            ymax = 1;
+          }
+          if (ymin === ymax) {
+            const eps = Math.abs(ymin || 1) * 0.05;
+            ymin -= eps;
+            ymax += eps;
+          } else {
+            const pad = (ymax - ymin) * 0.05;
+            ymin -= pad;
+            ymax += pad;
+          }
+          const axisId = `y${idx}`;
+          ds.yAxisID = axisId;
+          scales[axisId] = {
+            type: 'linear',
+            position: idx % 2 === 0 ? 'left' : 'right',
+            display: idx === 0, // 只显示第一条轴的刻度
+            grid: { drawOnChartArea: idx === 0 }, // 只第一条画网格
+            suggestedMin: ymin,
+            suggestedMax: ymax,
+            ticks: { callback: (v) => fmtNum(v) },
+          };
+        });
 
         if (chartInstance) {
           chartInstance.destroy();
@@ -699,21 +734,7 @@
                 updateHovered(activeEls[0].index);
               else chartPoint.textContent = "";
             },
-            scales: {
-              y: {
-                suggestedMin: yMin,
-                suggestedMax: yMax,
-                ticks: { callback: (v) => fmtNum(v) },
-              },
-              x: {
-                ticks: {
-                  maxRotation: 0,
-                  minRotation: 0,
-                  autoSkip: true,
-                  autoSkipPadding: 12,
-                },
-              },
-            },
+            scales,
             // 新增：自定义 tooltip 的标题与数值格式
             plugins: {
               legend: { display: true },
