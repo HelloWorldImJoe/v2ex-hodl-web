@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>V2EX HODL 已移除持仓归档</title>
+	<style>
+		:root { --fg:#0f172a; --muted:#64748b; --bg:#f8fafc; --card:#ffffff; --pri:#2563eb; }
+		* { box-sizing: border-box; }
+		body { margin:0; font:14px/1.6 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji"; color:var(--fg); background:var(--bg); }
+		header { display:flex; align-items:center; gap:12px; padding:16px 20px; background:var(--card); border-bottom:1px solid #e2e8f0; position:sticky; top:0; z-index:10; }
+		header img { width:36px; height:36px; border-radius:8px; }
+		header h1 { font-size:16px; margin:0; }
+		main { max-width: none; margin: 0 auto; padding: 0 20px; }
+		.card { min-height: calc(100vh - 68px); display:flex; flex-direction:column; }
+		.toolbar { display:flex; gap:10px; align-items:end; flex-wrap:wrap; }
+		label { font-weight:600; color:#334155; display:flex; flex-direction:column; gap:6px; }
+		input, select { height:34px; padding:0 10px; border:1px solid #cbd5e1; border-radius:8px; background:white; }
+		input[type="number"] { width:110px; }
+		input[type="text"] { width:300px; }
+		.btn { height:34px; padding:0 12px; border-radius:8px; border:1px solid var(--pri); color:white; background:var(--pri); cursor:pointer; }
+		.btn.secondary { background:white; color:var(--pri); }
+		.grid { width:100%; overflow:auto; flex:1; }
+		table { border-collapse:collapse; width:100%; }
+		th, td { padding:8px 10px; border-bottom:1px solid #eef2f7; white-space:nowrap; text-align:left; }
+		th { background:#f8fafc; position:sticky; top:0; z-index:1; }
+		.muted { color:var(--muted); }
+		.error { color:#b91c1c; }
+		.mt12 { margin-top:12px; }
+		.mt16 { margin-top:16px; }
+		.avatar { width:24px; height:24px; border-radius:50%; object-fit:cover; background:#e2e8f0; vertical-align:middle; }
+		.usercell { display:flex; align-items:center; gap:8px; }
+		.addr { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+		.rank-up { color: #16a34a; }
+		.rank-down { color: #dc2626; }
+		.row-rank-up { background-color: #f0fdf4; }
+		.row-rank-down { background-color: #fef2f2; }
+		/* 小型复制按钮 */
+		.copy-btn { height: 22px; padding: 0 6px; margin-left: 6px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:var(--fg); font-size:12px; cursor:pointer; }
+		.copy-btn.success { border-color:#16a34a; color:#16a34a; }
+		.copy-btn:disabled { opacity:.5; cursor:not-allowed; }
+		/* 右侧侧边栏与遮罩（复用 rank 页样式） */
+		.side-mask {
+			position: fixed;
+			inset: 0;
+			background: rgba(15, 23, 42, 0.4);
+			backdrop-filter: saturate(120%) blur(2px);
+			z-index: 998;
+		}
+		.side-panel {
+			position: fixed;
+			top: 0;
+			right: 0;
+			height: 100%;
+			width: min(92vw, 560px);
+			background: var(--card);
+			box-shadow: -2px 0 12px rgba(2, 6, 23, 0.08);
+			transform: translateX(100%);
+			transition: transform 0.24s ease;
+			z-index: 999;
+			display: flex;
+			flex-direction: column;
+		}
+		.side-panel.open { transform: translateX(0); }
+		.side-panel .toolbar {
+			position: sticky;
+			top: 0;
+			background: var(--card);
+			z-index: 2;
+			padding: 16px 20px;
+			border-bottom: 1px solid #e2e8f0;
+			display: flex;
+			gap: 10px;
+			align-items: center;
+			justify-content: space-between;
+			flex-wrap: nowrap;
+		}
+	</style>
+	<link rel="preconnect" href="https://imagedelivery.net" crossorigin>
+</head>
+<body>
+	<header>
+		<img src="https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/30e0d3f6-6076-40f8-7abb-8a7676f83c00/public" alt="logo" />
+		<h1>V2EX HODL 已移除持仓归档</h1>
+	</header>
+	<main>
+		<div class="card">
+			<div class="toolbar">
+				<label>
+					API 基础地址
+					<input id="apiBase" type="text" placeholder="例如：https://api.example.com" />
+				</label>
+				<label>
+					Token Mint
+					<input id="token" type="text" placeholder="可选：Token Mint 地址" value="9raUVuzeWUk53co63M4WXLWPWE4Xc6Lpn7RS9dnkpump"/>
+				</label>
+				<label>
+					持有者地址
+					<input id="owner" type="text" placeholder="可选：持有者钱包地址" />
+				</label>
+				<label>
+					开始时间
+					<input id="from" type="datetime-local" step="1" placeholder="选择开始时间" />
+				</label>
+				<label>
+					结束时间
+					<input id="to" type="datetime-local" step="1" placeholder="选择结束时间" />
+				</label>
+				<label>
+					排序
+					<select id="order">
+						<option value="desc">降序</option>
+						<option value="asc">升序</option>
+					</select>
+				</label>
+				<label>
+					查询数量
+					<input id="limit" type="number" value="100" min="1" max="5000" />
+				</label>
+				<label>
+					页数
+					<input id="offset" type="number" value="0" min="0" />
+				</label>
+				<button class="btn" id="run">查询</button>
+				<button class="btn secondary" id="clear">清空结果</button>
+			</div>
+
+			<div id="error" class="error mt12" hidden></div>
+			<div id="summary" class="muted mt12"></div>
+
+			<div class="grid mt16">
+				<table id="grid"><thead></thead><tbody></tbody></table>
+			</div>
+
+			<div id="sideMask" class="side-mask" hidden></div>
+			<aside id="detail" class="side-panel" aria-hidden="true">
+				<div class="toolbar">
+					<div id="detailTitle" class="muted"></div>
+					<button class="btn secondary" id="detailClose">关闭</button>
+				</div>
+				<div class="grid mt12">
+					<table id="detailGrid"><thead></thead><tbody></tbody></table>
+				</div>
+			</aside>
+		</div>
+	</main>
+
+	<script>
+		const el = (id) => document.getElementById(id);
+		const apiBase = el('apiBase');
+		const token = el('token');
+		const owner = el('owner');
+		const from = el('from');
+		const to = el('to');
+		const order = el('order');
+		const limit = el('limit');
+		const offset = el('offset');
+		const runBtn = el('run');
+		const clearBtn = el('clear');
+		const errorBox = el('error');
+		const summary = el('summary');
+		const thead = document.querySelector('#grid thead');
+		const tbody = document.querySelector('#grid tbody');
+
+		// 详情面板与遮罩
+		const detail = el('detail');
+		const detailTitle = el('detailTitle');
+		const detailClose = el('detailClose');
+		const dthead = document.querySelector('#detailGrid thead');
+		const dtbody = document.querySelector('#detailGrid tbody');
+		const sideMask = el('sideMask');
+
+		function openSide(){
+			detail.classList.add('open');
+			detail.setAttribute('aria-hidden', 'false');
+			sideMask.hidden = false;
+			document.body.style.overflow = 'hidden';
+		}
+		function closeSide(){
+			detail.classList.remove('open');
+			detail.setAttribute('aria-hidden', 'true');
+			sideMask.hidden = true;
+			document.body.style.overflow = '';
+			dthead.innerHTML = '';
+			dtbody.innerHTML = '';
+			detailTitle.textContent = '';
+		}
+
+		// 数字/百分比/变化格式化
+		const nf = new Intl.NumberFormat('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+		function fmtNum(n){ return nf.format(n ?? 0); }
+		const nfCompact = new Intl.NumberFormat('zh-CN', { notation: 'compact', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+		function fmtCompact(n){ return nfCompact.format(n ?? 0); }
+		function fmtPct(p){
+			const v = Number(p);
+			if (!isFinite(v)) return '';
+			return v.toFixed(2) + '%';
+		}
+		function fmtDelta(v){
+			if (v === null || v === undefined) return '-';
+			const n = Number(v);
+			if (!isFinite(n)) return '-';
+			if (n > 0) return `<span class="rank-up">↑${n.toFixed(0)}</span>`;
+			if (n < 0) return `<span class="rank-down">↓${Math.abs(n).toFixed(0)}</span>`;
+			return '0';
+		}
+		function esc(v){ return v == null ? '' : String(v).replace(/[&<>]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[s])); }
+		function shortAddr(a){ if(!a) return ''; return a.length > 12 ? a.slice(0,6) + '...' + a.slice(-4) : a; }
+		function getMysteryName(r){ const addr = (r?.owner_address || '').trim(); const head = addr.slice(0,4); return `神秘的${head}`; }
+
+		// 时间解析与本地格式化（将无时区的 UTC 文本解析为 UTC 再转本地显示）
+		function pad2(n){ return String(n).padStart(2,'0'); }
+		function fmtLocal(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`; }
+		function parseToDate(v){
+			if (v === null || v === undefined) return null;
+			if (typeof v === 'number') { const ms = v < 1e12 ? v*1000 : v; const d=new Date(ms); return isNaN(d)?null:d; }
+			const s = String(v).trim(); if (!s) return null;
+			if (/^\d+$/.test(s)) { const num=Number(s); const ms=num<1e12?num*1000:num; const d=new Date(ms); return isNaN(d)?null:d; }
+			const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+			if (m){ const [,y,mo,d,h='00',mi='00',se='00']=m; return new Date(Date.UTC(+y,+mo-1,+d,+h,+mi,+se)); }
+			const d=new Date(s); return isNaN(d)?null:d;
+		}
+		function toLocalStr(v){ const d=parseToDate(v); return d?fmtLocal(d):(v??''); }
+
+		// 当前列表（用于点击行）
+		let currentList = [];
+
+		function getBase(){
+			let base = (apiBase.value || '').trim();
+			if (!base) return '';
+			if (base.endsWith('/')) base = base.slice(0,-1);
+			return base;
+		}
+
+		function getDateParamStr(inputEl){
+			const v = (inputEl?.value || '').trim();
+			if (!v) return '';
+			if (inputEl.type === 'datetime-local'){
+				const d = new Date(v);
+				if (!isNaN(d)) return d.toISOString();
+			}
+			const d2 = new Date(v);
+			if (!isNaN(d2)) return d2.toISOString();
+			return v;
+		}
+
+		function buildUrl(){
+			const base = getBase();
+			const params = new URLSearchParams();
+			const fv = getDateParamStr(from);
+			const tv = getDateParamStr(to);
+			if (token.value.trim()) params.set('token', token.value.trim());
+			if (owner.value.trim()) params.set('owner', owner.value.trim());
+			if (fv) params.set('from', fv);
+			if (tv) params.set('to', tv);
+			if (order.value) params.set('order', order.value);
+			if (limit.value) params.set('limit', limit.value);
+			if (offset.value) params.set('offset', offset.value);
+			return `${base}/api/holders/removed?${params.toString()}`;
+		}
+
+		function buildHistoryUrl(ownerAddress, tokenAddress){
+			const base = getBase();
+			const params = new URLSearchParams();
+			if (tokenAddress) params.set('token', tokenAddress);
+			else if (token.value.trim()) params.set('token', token.value.trim());
+			params.set('owner', ownerAddress);
+			params.set('order', 'desc');
+			params.set('limit', '30');
+			params.set('offset', '0');
+			return `${base}/api/holders/history?${params.toString()}`;
+		}
+
+		function fmtAmount(n){
+			const v = Number(n) || 0;
+			if (Math.abs(v) >= 100_000) return (v / 1_000_000).toFixed(2).replace(/\.00$/, '') + 'M';
+			if (Math.abs(v) >= 1_000) return (v / 1_000).toFixed(2).replace(/\.00$/, '') + 'k';
+			return fmtNum(v);
+		}
+
+		function renderTable(rows){
+			if (!rows || !rows.length){
+				thead.innerHTML = '';
+				tbody.innerHTML = '<tr><td class="muted">无数据</td></tr>';
+				return;
+			}
+			thead.innerHTML = `
+				<tr>
+					<th>#</th>
+					<th>用户</th>
+					<th>钱包地址</th>
+					<th>持币数量</th>
+					<th>占比</th>
+					<th>原始排名</th>
+					<th>排名变化</th>
+					<th>移除时间</th>
+				</tr>`;
+			tbody.innerHTML = rows.map((r, i) => {
+				const isMystery = !r.v2ex_username;
+				const avatar = isMystery ? '' : (r.avatar_url ? `<img class="avatar" src="${esc(r.avatar_url)}" alt="" />` : `<span class="avatar"></span>`);
+				const uname = r.v2ex_username ? esc(r.v2ex_username) : esc(getMysteryName(r));
+				const addrFull = esc(r.owner_address || '');
+				const addrShort = shortAddr(r.owner_address || '');
+				const amt = fmtAmount(+r.hold_amount || 0);
+				const pct = fmtPct(r.hold_percentage);
+				const rk = r.hold_rank == null ? '-' : String(r.hold_rank);
+				const delta = fmtDelta(r.rank_delta);
+				const t = esc(toLocalStr(r.removed_at) || '');
+
+				let rowClass = '';
+				const rankDelta = Number(r.rank_delta);
+				if (isFinite(rankDelta) && rankDelta !== 0){ rowClass = rankDelta > 0 ? 'row-rank-up' : 'row-rank-down'; }
+
+				const rankCellClass = isFinite(rankDelta) && rankDelta !== 0 ? (rankDelta > 0 ? 'row-rank-up' : 'row-rank-down') : '';
+
+				return `<tr data-idx="${i}" class="${rowClass}">
+					<td>${i+1}</td>
+					<td><div class="usercell">${avatar}<span>${uname}</span></div></td>
+					  <td class="addr" title="${addrFull}">${addrShort}<button type="button" class="copy-btn" data-copy="${addrFull}" title="复制地址">复制</button></td>
+					<td title="${fmtNum(+r.hold_amount || 0)}">${amt}</td>
+					<td>${pct}</td>
+					<td>${rk}</td>
+					<td class="${rankCellClass}">${delta}</td>
+					<td>${t}</td>
+				</tr>`;
+			}).join('');
+		}
+
+		function renderHistoryTable(rows){
+			if (!rows || !rows.length){
+				dthead.innerHTML = '';
+				dtbody.innerHTML = '<tr><td class="muted">暂无历史数据</td></tr>';
+				return;
+			}
+			dthead.innerHTML = `
+				<tr>
+					<th>日期</th>
+					<th>持币数量</th>
+					<th>占比</th>
+					<th>原始排名</th>
+					<th>排名变化</th>
+					<th>数量变化</th>
+				</tr>`;
+			dtbody.innerHTML = rows.map(r => {
+				const dateStr = esc(r.statistics_date || '');
+				const amt = fmtAmount(+r.hold_amount || 0);
+				const pct = fmtPct(r.hold_percentage);
+				const rk = r.hold_rank == null ? '-' : String(r.hold_rank);
+				const delta = fmtDelta(r.rank_delta);
+				const amountDelta = (r.amount_delta==null||r.amount_delta==='')?'-':(function(v){
+					const n=Number(v); if(!isFinite(n)) return '-'; const sign=n>0?'+':(n<0?'-':''); const abs=Math.abs(n); if (abs>=100_000) return sign+(abs/1_000_000).toFixed(2).replace(/\.00$/,'')+'M'; if (abs>=1_000) return sign+(abs/1_000).toFixed(2).replace(/\.00$/,'')+'k'; return sign+fmtNum(abs);
+				})(r.amount_delta);
+
+				let rowClass = '';
+				const rankDelta = Number(r.rank_delta);
+				const amtDeltaNum = Number(r.amount_delta);
+				if (isFinite(rankDelta) && rankDelta !== 0) rowClass = rankDelta > 0 ? 'row-rank-up' : 'row-rank-down';
+				else if (isFinite(amtDeltaNum) && amtDeltaNum !== 0) rowClass = amtDeltaNum > 0 ? 'row-rank-up' : 'row-rank-down';
+
+				const rankCellClass = isFinite(rankDelta) && rankDelta !== 0 ? (rankDelta > 0 ? 'row-rank-up' : 'row-rank-down') : '';
+				const amtCellClass = isFinite(amtDeltaNum) && amtDeltaNum !== 0 ? (amtDeltaNum > 0 ? 'row-rank-up' : 'row-rank-down') : '';
+
+				return `<tr class="${rowClass}">
+					<td>${dateStr}</td>
+					<td>${amt}</td>
+					<td>${pct}</td>
+					<td>${rk}</td>
+					<td class="${rankCellClass}">${delta}</td>
+					<td class="${amtCellClass}">${amountDelta}</td>
+				</tr>`;
+			}).join('');
+		}
+
+		async function loadHistory(ownerAddress, displayName, tokenAddress){
+			if (!getBase()) { errorBox.hidden=false; errorBox.textContent='请先填写 API 基础地址'; return; }
+			if (!ownerAddress) return;
+			const short = shortAddr(ownerAddress);
+			detailTitle.textContent = `用户：${displayName}（${short}） | 加载中...`;
+			dthead.innerHTML = ''; dtbody.innerHTML = '';
+			openSide();
+			try{
+				const res = await fetch(buildHistoryUrl(ownerAddress, tokenAddress));
+				const data = await res.json();
+				if (!data.ok) throw new Error(data.error || '历史数据请求失败');
+				renderHistoryTable(Array.isArray(data.results) ? data.results : []);
+				detailTitle.textContent = `用户：${displayName}（${short}）`;
+			}catch(e){
+				dthead.innerHTML = '';
+				dtbody.innerHTML = '';
+				detailTitle.textContent = `用户：${displayName}（${short}）`;
+				errorBox.hidden = false;
+				errorBox.textContent = e.message || String(e);
+			}
+		}
+
+		async function run(){
+			errorBox.hidden = true; errorBox.textContent = '';
+			summary.textContent = '查询中...';
+			thead.innerHTML = ''; tbody.innerHTML = '';
+			closeSide();
+			try{
+				const base = getBase();
+				if (!base) throw new Error('请先填写 API 基础地址');
+
+				const url = buildUrl();
+				const res = await fetch(url);
+				const data = await res.json();
+				if (!data.ok) throw new Error(data.error || '请求失败');
+
+				const rows = Array.isArray(data.results) ? data.results : [];
+				currentList = rows;
+				summary.textContent = `count=${data.count} limit=${data.limit} offset=${data.offset} order=${data.order}`;
+				renderTable(rows);
+			}catch(e){
+				summary.textContent = '';
+				errorBox.hidden = false;
+				errorBox.textContent = e.message || String(e);
+				renderTable([]);
+			}
+		}
+
+		runBtn.addEventListener('click', run);
+		clearBtn.addEventListener('click', ()=>{
+			tbody.innerHTML = ''; thead.innerHTML = ''; summary.textContent=''; errorBox.hidden=true;
+			currentList = [];
+			closeSide();
+		});
+
+			// 复制工具
+			async function copyText(text, btn){
+				try{
+					if (navigator.clipboard && navigator.clipboard.writeText){
+						await navigator.clipboard.writeText(text);
+					} else {
+						const ta = document.createElement('textarea');
+						ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+						document.body.appendChild(ta); ta.focus(); ta.select();
+						document.execCommand('copy'); document.body.removeChild(ta);
+					}
+					if (btn){ const old=btn.textContent; btn.textContent='已复制'; btn.classList.add('success'); setTimeout(()=>{ btn.textContent=old; btn.classList.remove('success'); }, 1200); }
+				}catch{
+					if (btn){ const old=btn.textContent; btn.textContent='复制失败'; setTimeout(()=>{ btn.textContent=old; }, 1200); }
+				}
+			}
+
+			tbody.addEventListener('click', (e)=>{
+				const copyBtn = e.target.closest('.copy-btn');
+				if (copyBtn){
+					e.stopPropagation();
+					const text = copyBtn.getAttribute('data-copy') || '';
+					if (text) copyText(text, copyBtn);
+					return;
+				}
+				const tr = e.target.closest('tr[data-idx]');
+				if (!tr) return;
+				const idx = Number(tr.dataset.idx);
+				const row = currentList[idx];
+				if (!row) return;
+				const displayName = row.v2ex_username ? row.v2ex_username : getMysteryName(row);
+				const tokenAddr = row.token_address || token.value.trim();
+				loadHistory(row.owner_address, displayName, tokenAddr);
+			});
+
+		detailClose.addEventListener('click', closeSide);
+		sideMask.addEventListener('click', closeSide);
+		window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') closeSide(); });
+
+		// 记忆 API Base
+		(function initBase(){
+			const saved = localStorage.getItem('v2ex_hodl_api_base') || '';
+			if (saved) apiBase.value = saved;
+			apiBase.addEventListener('change', ()=>{
+				localStorage.setItem('v2ex_hodl_api_base', apiBase.value.trim());
+			});
+		})();
+	</script>
+</body>
+</html>

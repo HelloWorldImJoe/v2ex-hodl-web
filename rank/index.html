@@ -35,6 +35,10 @@
     .rank-down { color: #dc2626; }
     .row-rank-up { background-color: #f0fdf4; }
     .row-rank-down { background-color: #fef2f2; }
+  /* 小型复制按钮 */
+  .copy-btn { height: 22px; padding: 0 6px; margin-left: 6px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:var(--fg); font-size:12px; cursor:pointer; }
+  .copy-btn.success { border-color:#16a34a; color:#16a34a; }
+  .copy-btn:disabled { opacity:.5; cursor:not-allowed; }
     /* 新增：右侧侧边栏与遮罩 */
     .side-mask {
       position: fixed;
@@ -313,8 +317,8 @@
         const isMystery = !r.v2ex_username;
         const avatar = isMystery ? '' : (r.avatar_url ? `<img class="avatar" src="${esc(r.avatar_url)}" alt="" />` : `<span class="avatar"></span>`);
         const uname = r.v2ex_username ? esc(r.v2ex_username) : esc(getMysteryName(r));
-        const addrFull = esc(r.owner_address || '');
-        const addrShort = shortAddr(r.owner_address || '');
+  const addrFull = esc(r.owner_address || '');
+  const addrShort = shortAddr(r.owner_address || '');
         const amt = fmtAmount(+r.hold_amount || 0);
         const pct = fmtPct(r.hold_percentage);
         const rk = r.hold_rank == null ? '-' : String(r.hold_rank);
@@ -340,7 +344,7 @@
         return `<tr data-idx="${i}" class="${rowClass}">
           <td>${i+1}</td>
           <td><div class="usercell">${avatar}<span>${uname}</span></div></td>
-          <td class="addr" title="${addrFull}">${addrShort}</td>
+          <td class="addr" title="${addrFull}">${addrShort}<button type="button" class="copy-btn" data-copy="${addrFull}" title="复制地址">复制</button></td>
           <td title="${fmtNum(+r.hold_amount || 0)}">${amt}</td>
           <td>${pct}</td>
           <td>${rk}</td>
@@ -462,7 +466,31 @@
     });
 
     // 新增：点击表格行显示侧边栏（原逻辑保留）
+    // 复制工具
+    async function copyText(text, btn){
+      try{
+        if (navigator.clipboard && navigator.clipboard.writeText){
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+          document.body.appendChild(ta); ta.focus(); ta.select();
+          document.execCommand('copy'); document.body.removeChild(ta);
+        }
+        if (btn){ const old=btn.textContent; btn.textContent='已复制'; btn.classList.add('success'); setTimeout(()=>{ btn.textContent=old; btn.classList.remove('success'); }, 1200); }
+      }catch{
+        if (btn){ const old=btn.textContent; btn.textContent='复制失败'; setTimeout(()=>{ btn.textContent=old; }, 1200); }
+      }
+    }
+
     tbody.addEventListener('click', (e)=>{
+      const copyBtn = e.target.closest('.copy-btn');
+      if (copyBtn){
+        e.stopPropagation();
+        const text = copyBtn.getAttribute('data-copy') || '';
+        if (text) copyText(text, copyBtn);
+        return;
+      }
       const tr = e.target.closest('tr[data-idx]');
       if (!tr) return;
       const idx = Number(tr.dataset.idx);
