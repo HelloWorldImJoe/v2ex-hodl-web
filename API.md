@@ -48,6 +48,9 @@
 		member_tips_received: number,
 		total_sol_tip_amount: number,
 		v2ex_token_tip_count: number,
+		holders: number,
+		price: number,
+		price_change_24h: number,
 		total_v2ex_token_tip_amount: number,
 	created_at: string  // UTC 文本 "YYYY-MM-DD HH:MM:SS"
 	}>

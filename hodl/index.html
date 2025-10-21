@@ -478,6 +478,11 @@
         start_timestamp: "开始时间",
         end_timestamp: "结束时间",
 
+        // 新增：/api/stats 的三个字段
+        holders: "持有人数",
+        price: "价格",
+        price_change_24h: "24h 涨跌",
+
         // v2exer_solana_address
         owner_address: "持有者地址",
         v2ex_username: "V2EX 用户名",
@@ -571,6 +576,29 @@
             );
       }
 
+      // 新增：price 动态小数位格式化
+      function fmtPrice(n) {
+        if (!isFinite(n)) return "";
+        const abs = Math.abs(n);
+        if (abs >= 1) return Number(n).toFixed(3); // ≥1 保留 3 位小数
+        if (abs === 0) return "0"; // 0 显示为 0
+        // <1：保留小数点后连续 0 之后的 3 位有效数字
+        const s = abs.toFixed(12); // 充足精度用于统计前导 0
+        const m = s.match(/^0\.(0*)(\d+)/);
+        const leadingZeros = m ? m[1].length : 0;
+        const decimals = Math.min(leadingZeros + 3, 12);
+        // 去除结尾多余 0 和可能的结尾小数点
+        return Number(n).toFixed(decimals).replace(/(\.\d*?[1-9])0+$/,"$1").replace(/\.$/,"");
+      }
+
+      // 修改：按字段定制的小数位格式化（price_change_24h 追加 %，price 使用 fmtPrice）
+      function fmtByKey(key, n) {
+        if (!isFinite(n)) return "";
+        if (key === "price") return fmtPrice(n);
+        if (key === "price_change_24h") return Number(n).toFixed(2) + "%";
+        return fmtNum(n);
+      }
+
       // 新增：将标签最多拆成两行（优先按空格；否则按长度切分）
       function wrap2Lines(s) {
         if (Array.isArray(s)) return s.slice(0, 2);
@@ -624,7 +652,7 @@
           const firstKey = currentYKeys[0];
           const yvRaw = r[firstKey];
           const yvNum = toNum(yvRaw);
-          yInfo = `，${getLabel(firstKey)}=${fmtNum(yvNum)}`;
+          yInfo = `，${getLabel(firstKey)}=${fmtByKey(firstKey, yvNum)}`;
         }
         chartPoint.textContent = `当前点：${getLabel(currentXKey)}=${xv}${yInfo}`;
       }
@@ -658,6 +686,7 @@
           return {
             label: getLabel(yk),
             data,
+            __key: yk, // 新增：记录字段 key，便于 tooltip/坐标轴定制格式
             borderColor: color,
             backgroundColor: hexToRgba(color, 0.15),
             tension: 0.25,
@@ -704,11 +733,12 @@
           scales[axisId] = {
             type: 'linear',
             position: idx % 2 === 0 ? 'left' : 'right',
-            display: idx === 0, // 只显示第一条轴的刻度
-            grid: { drawOnChartArea: idx === 0 }, // 只第一条画网格
+            display: idx === 0,
+            grid: { drawOnChartArea: idx === 0 },
             suggestedMin: ymin,
             suggestedMax: ymax,
-            ticks: { callback: (v) => fmtNum(v) },
+            // 修改：按字段格式化刻度
+            ticks: { callback: (v) => fmtByKey(ds.__key, v) },
           };
         });
 
@@ -753,11 +783,13 @@
                       currentXKey
                     );
                   },
+                  // 修改：tooltip 数值按字段格式化
                   label: (item) => {
                     const dsLabel = item.dataset?.label || "";
-                    const raw = item.raw;
-                    // 直接显示原值，避免紧凑格式导致难以分辨
-                    return `${dsLabel}: ${raw}`;
+                    const key = item.dataset?.__key || "";
+                    const rawNum = toNum(item.raw);
+                    const val = fmtByKey(key, rawNum);
+                    return `${dsLabel}: ${val}`;
                   },
                 },
               },
@@ -925,6 +957,13 @@
           const cols = Array.from(
             new Set(rows.flatMap((r) => Object.keys(r)))
           ).filter((c) => !HIDDEN_FIELDS.has(c));
+          // 新增：将 created_at 放到列的最后
+          const createdIdx = cols.indexOf("created_at");
+          if (createdIdx > -1) {
+            const [created] = cols.splice(createdIdx, 1);
+            cols.push(created);
+          }
+
           thead.innerHTML =
             "<tr>" +
             cols.map((c) => `<th>${getLabel(c)}</th>`).join("") +
@@ -945,9 +984,14 @@
                     const v = r[c];
                     const isDateOnly =
                       typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
-                    // 仅日期(YYYY-MM-DD)保持原样；其它时间字段本地化
                     if (TIME_FIELDS.includes(c) && !isDateOnly) {
                       return `<td>${esc(toLocalStr(v))}</td>`;
+                    }
+                    // 新增：price 与 price_change_24h 按字段小数位显示
+                    if (c === "price" || c === "price_change_24h") {
+                      const num = toNum(v);
+                      const disp = isFinite(num) ? fmtByKey(c, num) : v;
+                      return `<td>${esc(disp)}</td>`;
                     }
                     return `<td>${esc(v)}</td>`;
                   })
