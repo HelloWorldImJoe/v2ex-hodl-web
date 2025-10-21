@@ -82,6 +82,48 @@
         border-radius: 8px;
         background: white;
       }
+      /* 让多选下拉（Y轴）可显示多项并可滚动 */
+      select[multiple] {
+        height: auto;
+        min-height: 80px;
+        max-height: 160px;
+        padding: 6px 8px;
+        overflow: auto;
+      }
+      /* 自定义多选菜单样式（Y轴复选下拉） */
+      .ms { position: relative; display: inline-block; }
+      .ms-btn { height: 34px; }
+      .ms-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        z-index: 20;
+        background: #fff;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        box-shadow: 0 10px 20px rgba(2, 6, 23, 0.08);
+        padding: 8px;
+        min-width: 240px;
+        max-height: 260px;
+        overflow: auto;
+      }
+      .ms-item { display: block; padding: 4px 6px; white-space: nowrap; }
+      .ms-item label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        line-height: 1.6;
+        font-weight: 400;
+        color: var(--fg);
+        cursor: pointer;
+      }
+      .ms-item input[type="checkbox"] {
+        flex: 0 0 auto;
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        accent-color: var(--pri);
+      }
       input[type="number"] {
         width: 110px;
       }
@@ -229,7 +271,10 @@
         <div id="chartControls" class="toolbar mt12" hidden>
           <label>
             Y轴
-            <select id="chartY"></select>
+            <div id="chartYWrap" class="ms">
+              <button type="button" class="btn secondary ms-btn" id="chartYBtn">选择指标</button>
+              <div class="ms-menu" id="chartYMenu" hidden></div>
+            </div>
           </label>
           <label>
             X轴
@@ -280,19 +325,23 @@
       // 新增：图表相关引用与状态
       const chartWrap = document.getElementById("chartWrap");
       const chartControls = document.getElementById("chartControls");
-      const chartX = document.getElementById("chartX");
-      const chartY = document.getElementById("chartY");
+    const chartX = document.getElementById("chartX");
+    // 自定义 Y 多选菜单相关元素
+    const chartYBtn = document.getElementById("chartYBtn");
+    const chartYMenu = document.getElementById("chartYMenu");
       const chartEl = document.getElementById("chart");
       const chartCount = document.getElementById("chartCount");
       const chartPoint = document.getElementById("chartPoint");
       // 新增：反转按钮引用
       const toggleReverse = document.getElementById("toggleReverse");
       let chartInstance = null;
+  // 防止重复绑定外部点击监听
+  let yMenuOutsideBound = false;
 
       // 新增：当前数据与轴状态
       let currentRows = [];
       let currentXKey = "";
-      let currentYKey = "";
+  let currentYKeys = [];
       // 新增：X 轴是否反转与索引映射（图上索引 -> 原 rows 索引）
       let reverseX = true; // 默认 X 轴反序
       let chartIndexMap = [];
@@ -318,6 +367,14 @@
       }
       function isISO(s) {
         return typeof s === "string" && !isNaN(Date.parse(s));
+      }
+      // 更稳健的数值解析：支持字符串中包含逗号/空格
+      function toNum(v) {
+        if (v == null || v === "") return NaN;
+        if (typeof v === "number") return v;
+        const s = String(v).trim().replace(/[,\s]/g, "");
+        const n = parseFloat(s);
+        return isFinite(n) ? n : NaN;
       }
       // 与 rank/index.html 对齐的时间解析与本地化
       function pad2(n) {
@@ -453,6 +510,35 @@
           .join("");
         if (selected && items.includes(selected)) select.value = selected;
       }
+      // 渲染自定义 Y 菜单
+      function renderYMenu(items, selectedKeys) {
+        const sel = new Set(selectedKeys || []);
+        chartYMenu.innerHTML = items
+          .map(
+            (k) => `
+            <div class="ms-item">
+              <label>
+                <input type="checkbox" value="${k}" ${sel.has(k) ? "checked" : ""} />
+                ${getLabel(k)}
+              </label>
+            </div>`
+          )
+          .join("");
+      }
+      function updateYBtnText() {
+        if (!currentYKeys || currentYKeys.length === 0) {
+          chartYBtn.textContent = "选择指标";
+        } else if (currentYKeys.length === 1) {
+          chartYBtn.textContent = getLabel(currentYKeys[0]);
+        } else {
+          chartYBtn.textContent = `${currentYKeys.length} 个指标`;
+        }
+      }
+      function getMenuSelected() {
+        return Array.from(chartYMenu.querySelectorAll('input[type="checkbox"]:checked')).map(
+          (i) => i.value
+        );
+      }
 
       // 数值格式化（统一两位小数）
       const nfCompact =
@@ -521,32 +607,61 @@
         }
         const r = currentRows[rowIndex];
         const xv = fmtX(r[currentXKey], currentXKey);
-        const yvRaw = r[currentYKey];
-        const yvNum = typeof yvRaw === "string" ? parseFloat(yvRaw) : yvRaw;
-        chartPoint.textContent = `当前点：${getLabel(
-          currentXKey
-        )}=${xv}，${getLabel(currentYKey)}=${fmtNum(yvNum)}`;
+        // 展示多选的第一条曲线的数值，若有
+        let yInfo = "";
+        if (currentYKeys && currentYKeys.length) {
+          const firstKey = currentYKeys[0];
+          const yvRaw = r[firstKey];
+          const yvNum = toNum(yvRaw);
+          yInfo = `，${getLabel(firstKey)}=${fmtNum(yvNum)}`;
+        }
+        chartPoint.textContent = `当前点：${getLabel(currentXKey)}=${xv}${yInfo}`;
       }
 
-      function buildChart(rows, xKey, yKey) {
+      function buildChart(rows, xKey, yKeys) {
         // 新增：根据反转状态生成索引序列
         const idxs = rows.map((_, i) => i);
         if (reverseX) idxs.reverse();
         chartIndexMap = idxs;
 
-        const labels = idxs.map((i) =>
-          wrap2Lines(toLabel(rows[i][xKey], xKey))
-        );
-        const data = idxs.map((i) => {
-          const v = rows[i][yKey];
-          const n = typeof v === "string" ? parseFloat(v) : v;
-          return isFinite(n) ? n : null;
+        const labels = idxs.map((i) => wrap2Lines(toLabel(rows[i][xKey], xKey)));
+
+        // 支持多条数据系列
+        const palette = [
+          "#2563eb",
+          "#16a34a",
+          "#f59e0b",
+          "#ef4444",
+          "#8b5cf6",
+          "#06b6d4",
+          "#f97316",
+          "#84cc16",
+        ];
+        const datasets = (yKeys || []).map((yk, idx) => {
+          const color = palette[idx % palette.length];
+          const data = idxs.map((i) => {
+            const v = rows[i][yk];
+            const n = toNum(v);
+            return isFinite(n) ? n : null;
+          });
+          return {
+            label: getLabel(yk),
+            data,
+            borderColor: color,
+            backgroundColor: color + "26", // 0x26 ≈ 15% 透明度
+            tension: 0.25,
+            pointRadius: 2,
+            spanGaps: true,
+            fill: false,
+          };
         });
 
         // 基于数据自动收紧 Y 轴范围（5% padding），忽略 null
-        const nums = data.filter((v) => v != null && isFinite(v));
-        let yMin = Math.min(...nums),
-          yMax = Math.max(...nums);
+        const allNums = datasets.flatMap((ds) =>
+          (ds.data || []).filter((v) => v != null && isFinite(v))
+        );
+        let yMin = Math.min(...allNums),
+          yMax = Math.max(...allNums);
         if (!isFinite(yMin) || !isFinite(yMax)) {
           yMin = 0;
           yMax = 1;
@@ -571,22 +686,13 @@
           type: TIME_FIELDS.includes(xKey) ? "line" : "bar",
           data: {
             labels,
-            datasets: [
-              {
-                label: getLabel(yKey),
-                data,
-                borderColor: "#2563eb",
-                backgroundColor: "rgba(37,99,235,.15)",
-                tension: 0.25,
-                pointRadius: 0,
-              },
-            ],
+            datasets,
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            // 新增：更友好的交互模式
-            interaction: { mode: "index", intersect: false },
+            // 更友好的交互模式：最近点，不强制同索引联动
+            interaction: { mode: "nearest", intersect: false },
             // 新增：hover 时更新“当前点”
             onHover: (evt, activeEls) => {
               if (activeEls && activeEls.length)
@@ -626,8 +732,12 @@
                       currentXKey
                     );
                   },
-                  label: (item) =>
-                    `${getLabel(currentYKey)}: ${fmtNum(item.raw)}`,
+                  label: (item) => {
+                    const dsLabel = item.dataset?.label || "";
+                    const raw = item.raw;
+                    // 直接显示原值，避免紧凑格式导致难以分辨
+                    return `${dsLabel}: ${raw}`;
+                  },
                 },
               },
             },
@@ -649,37 +759,71 @@
         }
 
         const xDefault = xCandidates[0];
-        const yDefault = yCandidates[0];
+        const yDefault = yCandidates.slice(0, 1); // 默认选中第一项
 
         fillSelect(chartX, xCandidates, xDefault);
-        fillSelect(chartY, yCandidates, yDefault);
+        // 渲染自定义 Y 菜单
+        renderYMenu(yCandidates, yDefault);
 
         chartControls.hidden = false;
         chartWrap.hidden = false;
         chartCount.textContent = `数据点：${rows.length}`;
 
-        currentRows = rows;
-        currentXKey = chartX.value;
-        currentYKey = chartY.value;
+    currentRows = rows;
+    currentXKey = chartX.value;
+    currentYKeys = yDefault;
 
         updateReverseBtn();
-        buildChart(rows, chartX.value, chartY.value);
+    updateYBtnText();
+    buildChart(rows, chartX.value, currentYKeys);
 
         chartX.onchange = () => {
           currentXKey = chartX.value;
-          buildChart(rows, chartX.value, chartY.value);
+          buildChart(rows, chartX.value, currentYKeys);
           chartPoint.textContent = "";
         };
-        chartY.onchange = () => {
-          currentYKey = chartY.value;
-          buildChart(rows, chartX.value, chartY.value);
-          chartPoint.textContent = "";
+
+        // 打开/关闭菜单
+        chartYBtn.onclick = () => {
+          const hidden = chartYMenu.hasAttribute("hidden");
+          if (hidden) chartYMenu.removeAttribute("hidden");
+          else chartYMenu.setAttribute("hidden", "");
         };
+        // 点击外部关闭（仅绑定一次）
+        if (!yMenuOutsideBound) {
+          document.addEventListener("click", (e) => {
+            const wrap = document.getElementById("chartYWrap");
+            if (!wrap) return;
+            if (!wrap.contains(e.target)) {
+              chartYMenu.setAttribute("hidden", "");
+            }
+          });
+          yMenuOutsideBound = true;
+        }
+        // 监听复选变化
+        chartYMenu.addEventListener("change", () => {
+          let selected = getMenuSelected();
+          if (selected.length === 0) {
+            // 兜底：至少保留一个
+            const fallback = currentYKeys?.[0] || yCandidates[0];
+            if (fallback) {
+              selected = [fallback];
+              // 同步 UI 勾选
+              chartYMenu
+                .querySelectorAll('input[type="checkbox"]')
+                .forEach((i) => (i.checked = i.value === fallback));
+            }
+          }
+          currentYKeys = selected;
+          updateYBtnText();
+          buildChart(rows, chartX.value, currentYKeys);
+          chartPoint.textContent = "";
+        });
 
         toggleReverse.onclick = () => {
           reverseX = !reverseX;
           updateReverseBtn();
-          buildChart(currentRows, currentXKey, currentYKey);
+          buildChart(currentRows, currentXKey, currentYKeys);
           chartPoint.textContent = "";
         };
       }
@@ -817,7 +961,7 @@
         chartPoint.textContent = "";
         currentRows = [];
         currentXKey = "";
-        currentYKey = "";
+        currentYKeys = [];
         if (chartInstance) {
           chartInstance.destroy();
           chartInstance = null;
