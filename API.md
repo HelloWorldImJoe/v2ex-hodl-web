@@ -160,6 +160,46 @@
 
 ---
 
+### 3.2) 已移除持仓归档：v2exer_solana_address_removed
+
+- 路径：`GET /api/holders/removed`
+- 排序列：`removed_at`（默认 `order=desc`）
+- 查询参数：
+	- `token`：按 token mint 过滤
+	- `owner`：按持有者钱包地址过滤
+	- `from`/`to`：对 `removed_at` 进行时间过滤（UTC）
+	- `order`、`limit`、`offset`
+- 成功响应：
+```
+{
+	ok: true,
+	count: number,
+	order: "asc" | "desc",
+	limit: number,
+	offset: number,
+	results: Array<{
+		id: number,
+		owner_address: string,
+		v2ex_username: string | null,
+		avatar_url: string | null,
+		token_address: string,
+		token_account_address: string | null,
+		hold_rank: number | null,
+		hold_amount: number,
+		decimals: number,
+		hold_percentage: number,
+		rank_delta: number | null,
+		removed_at: string // UTC: YYYY-MM-DD HH:MM:SS
+	}>
+}
+```
+
+示例：
+- `/api/holders/removed?token=...&from=2025-01-01`
+- `/api/holders/removed?owner=...&order=asc&limit=100`
+
+---
+
 ## 4) Token 持仓历史：v2exer_solana_address_history
 
 - 路径：`GET /api/holders/history`
