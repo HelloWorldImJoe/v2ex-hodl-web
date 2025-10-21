@@ -1,592 +1,861 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>V2EX HODL 数据浏览器</title>
-  <style>
-    :root { --fg:#0f172a; --muted:#64748b; --bg:#f8fafc; --card:#ffffff; --pri:#2563eb; }
-    * { box-sizing: border-box; }
-    body { margin:0; font:14px/1.6 -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; color:var(--fg); background:var(--bg); }
-    header { display:flex; align-items:center; gap:12px; padding:16px 20px; background:var(--card); border-bottom:1px solid #e2e8f0; position:sticky; top:0; z-index:10; }
-    header img { width:36px; height:36px; border-radius:8px; }
-    header h1 { font-size:16px; margin:0; }
-    main { max-width: none; margin: 0 auto; padding: 0 20px; }
-    .card { min-height: calc(100vh - 68px); display: flex; flex-direction: column; }
-    .grid { width: 100%; overflow: auto; flex: 1; }
-    .chart-wrap { height: 340px; margin-top: 12px; }
-    .chart-wrap canvas { width: 100% !important; height: 100% !important; }
-    .row { display:flex; gap:12px; flex-wrap:wrap; }
-    label { font-weight:600; color:#334155; }
-    input, select { height:34px; padding:0 10px; border:1px solid #cbd5e1; border-radius:8px; background:white; }
-    input[type="number"] { width:110px; }
-    input[type="text"] { width:260px; }
-    .btn { height:34px; padding:0 12px; border-radius:8px; border:1px solid var(--pri); color:white; background:var(--pri); cursor:pointer; }
-    .btn.secondary { background:white; color:var(--pri); }
-    .toolbar { display:flex; gap:10px; align-items:end; flex-wrap:wrap; }
-    table { border-collapse: collapse; width:100%; }
-    th, td { padding:8px 10px; border-bottom:1px solid #eef2f7; white-space:nowrap; }
-    th { background:#f8fafc; position:sticky; top:0; z-index:1; text-align:left; }
-    .muted { color:var(--muted); }
-    .hint { font-size:12px; color:var(--muted); }
-    .mt8 { margin-top:8px; }
-    .mt12 { margin-top:12px; }
-    .mt16 { margin-top:16px; }
-    .error { color:#b91c1c; }
-  </style>
-</head>
-<body>
-  <header>
-    <img src="https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/30e0d3f6-6076-40f8-7abb-8a7676f83c00/public" alt="logo" />
-    <h1>V2EX HODL 数据浏览器(仅统计2025-10-17 15:16:00 UTC +8 之后的数据)</h1>
-  </header>
-  <main>
-    <div class="card">
-      <div class="toolbar">
-        <label>
-          API 基础地址
-          <input id="apiBase" type="text" placeholder="例如：https://api.example.com" />
-        </label>
-        <label>
-          数据表
-          <select id="table">
-            <option value="stats">v2ex-solana数据(stats)</option>
-            <option value="stats_history">v2ex-solana统计历史(stats_history)</option>
-          </select>
-        </label>
-        <label id="spanWrap" hidden>
-          取样跨度(span)
-          <select id="span">
-            <option value="">不取样</option>
-            <option value="1s">1s</option>
-            <option value="30s">30s</option>
-            <option value="1m">1m</option>
-            <option value="10m">10m</option>
-            <option value="30m">30m</option>
-            <option value="1h">1h</option>
-            <option value="6h">6h</option>
-          </select>
-        </label>
-        <label>
-          开始时间
-          <input id="from" type="datetime-local" step="1" placeholder="选择开始时间" />
-        </label>
-        <label>
-          结束时间
-          <input id="to" type="datetime-local" step="1" placeholder="选择结束时间" />
-        </label>
-        <label>
-          排序
-          <select id="order">
-            <option value="desc">降序</option>
-            <option value="asc">升序</option>
-          </select>
-        </label>
-        <label>
-          查询数量
-          <input id="limit" type="number" value="50" min="1" max="5000" />
-        </label>
-        <label>
-          页数
-          <input id="offset" type="number" value="0" min="0" />
-        </label>
-        <button class="btn" id="run">查询</button>
-        <button class="btn secondary" id="clear">清空结果</button>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>V2EX HODL 数据浏览器</title>
+    <style>
+      :root {
+        --fg: #0f172a;
+        --muted: #64748b;
+        --bg: #f8fafc;
+        --card: #ffffff;
+        --pri: #2563eb;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font: 14px/1.6 -apple-system, BlinkMacSystemFont, Segoe UI, Roboto,
+          Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        color: var(--fg);
+        background: var(--bg);
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 20px;
+        background: var(--card);
+        border-bottom: 1px solid #e2e8f0;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+      header img {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+      }
+      header h1 {
+        font-size: 16px;
+        margin: 0;
+      }
+      main {
+        max-width: none;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+      .card {
+        min-height: calc(100vh - 68px);
+        display: flex;
+        flex-direction: column;
+      }
+      .grid {
+        width: 100%;
+        overflow: auto;
+        flex: 1;
+      }
+      .chart-wrap {
+        height: 340px;
+        margin-top: 12px;
+      }
+      .chart-wrap canvas {
+        width: 100% !important;
+        height: 100% !important;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      label {
+        font-weight: 600;
+        color: #334155;
+      }
+      input,
+      select {
+        height: 34px;
+        padding: 0 10px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: white;
+      }
+      input[type="number"] {
+        width: 110px;
+      }
+      input[type="text"] {
+        width: 260px;
+      }
+      .btn {
+        height: 34px;
+        padding: 0 12px;
+        border-radius: 8px;
+        border: 1px solid var(--pri);
+        color: white;
+        background: var(--pri);
+        cursor: pointer;
+      }
+      .btn.secondary {
+        background: white;
+        color: var(--pri);
+      }
+      .toolbar {
+        display: flex;
+        gap: 10px;
+        align-items: end;
+        flex-wrap: wrap;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        padding: 8px 10px;
+        border-bottom: 1px solid #eef2f7;
+        white-space: nowrap;
+      }
+      th {
+        background: #f8fafc;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        text-align: left;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .hint {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .mt8 {
+        margin-top: 8px;
+      }
+      .mt12 {
+        margin-top: 12px;
+      }
+      .mt16 {
+        margin-top: 16px;
+      }
+      .error {
+        color: #b91c1c;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <img
+        src="https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/30e0d3f6-6076-40f8-7abb-8a7676f83c00/public"
+        alt="logo"
+      />
+      <h1>V2EX HODL 数据浏览器(仅统计2025-10-17 15:16:00 UTC +8 之后的数据)</h1>
+    </header>
+    <main>
+      <div class="card">
+        <div class="toolbar">
+          <label>
+            API 基础地址
+            <input
+              id="apiBase"
+              type="text"
+              placeholder="例如：https://api.example.com"
+            />
+          </label>
+          <label>
+            数据表
+            <select id="table">
+              <option value="stats">v2ex-solana数据(stats)</option>
+              <option value="stats_history">
+                v2ex-solana统计历史(stats_history)
+              </option>
+            </select>
+          </label>
+          <label id="spanWrap" hidden>
+            取样跨度(span)
+            <select id="span">
+              <option value="">不取样</option>
+              <option value="1s">1s</option>
+              <option value="30s">30s</option>
+              <option value="1m">1m</option>
+              <option value="10m">10m</option>
+              <option value="30m">30m</option>
+              <option value="1h">1h</option>
+              <option value="6h">6h</option>
+            </select>
+          </label>
+          <label>
+            开始时间
+            <input
+              id="from"
+              type="datetime-local"
+              step="1"
+              placeholder="选择开始时间"
+            />
+          </label>
+          <label>
+            结束时间
+            <input
+              id="to"
+              type="datetime-local"
+              step="1"
+              placeholder="选择结束时间"
+            />
+          </label>
+          <label>
+            排序
+            <select id="order">
+              <option value="desc">降序</option>
+              <option value="asc">升序</option>
+            </select>
+          </label>
+          <label>
+            查询数量
+            <input id="limit" type="number" value="50" min="1" max="5000" />
+          </label>
+          <label>
+            页数
+            <input id="offset" type="number" value="0" min="0" />
+          </label>
+          <button class="btn" id="run">查询</button>
+          <button class="btn secondary" id="clear">清空结果</button>
+        </div>
+        <div id="error" class="error mt12" hidden></div>
+        <div id="summary" class="muted mt12"></div>
+
+        <!-- 新增：图表控制与图表容器 -->
+        <div id="chartControls" class="toolbar mt12" hidden>
+          <label>
+            Y轴
+            <select id="chartY"></select>
+          </label>
+          <label>
+            X轴
+            <select id="chartX"></select>
+          </label>
+          <span id="chartCount" class="muted"></span>
+          <!-- 新增：当前点信息 -->
+          <span id="chartPoint" class="muted"></span>
+          <!-- 新增：反转 X 轴按钮 -->
+          <button class="btn secondary" id="toggleReverse">X轴：正序</button>
+        </div>
+        <div id="chartWrap" class="chart-wrap" hidden>
+          <canvas id="chart"></canvas>
+        </div>
+
+        <div class="grid mt16">
+          <table id="grid">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
-      <div id="error" class="error mt12" hidden></div>
-      <div id="summary" class="muted mt12"></div>
+    </main>
 
-      <!-- 新增：图表控制与图表容器 -->
-      <div id="chartControls" class="toolbar mt12" hidden>
-        <label>
-          Y轴
-          <select id="chartY"></select>
-        </label>
-        <label>
-          X轴
-          <select id="chartX"></select>
-        </label>
-        <span id="chartCount" class="muted"></span>
-        <!-- 新增：当前点信息 -->
-        <span id="chartPoint" class="muted"></span>
-        <!-- 新增：反转 X 轴按钮 -->
-        <button class="btn secondary" id="toggleReverse">X轴：正序</button>
-      </div>
-      <div id="chartWrap" class="chart-wrap" hidden>
-        <canvas id="chart"></canvas>
-      </div>
+    <!-- 新增：引入 Chart.js（在业务脚本之前） -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
-      <div class="grid mt16">
-        <table id="grid"><thead></thead><tbody></tbody></table>
-      </div>
-    </div>
-  </main>
+    <script>
+      const el = (id) => document.getElementById(id);
+      const table = el("table");
+      const apiBase = el("apiBase");
+      const from = el("from");
+      const to = el("to");
+      const token = el("token");
+      const owner = el("owner");
+      const order = el("order");
+      const limit = el("limit");
+      const offset = el("offset");
+      const spanWrap = document.getElementById("spanWrap");
+      const spanSel = document.getElementById("span");
+      const runBtn = el("run");
+      const clearBtn = el("clear");
+      const errorBox = el("error");
+      const summary = el("summary");
+      const thead = document.querySelector("#grid thead");
+      const tbody = document.querySelector("#grid tbody");
 
-  <!-- 新增：引入 Chart.js（在业务脚本之前） -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+      // 新增：图表相关引用与状态
+      const chartWrap = document.getElementById("chartWrap");
+      const chartControls = document.getElementById("chartControls");
+      const chartX = document.getElementById("chartX");
+      const chartY = document.getElementById("chartY");
+      const chartEl = document.getElementById("chart");
+      const chartCount = document.getElementById("chartCount");
+      const chartPoint = document.getElementById("chartPoint");
+      // 新增：反转按钮引用
+      const toggleReverse = document.getElementById("toggleReverse");
+      let chartInstance = null;
 
-<script>
-  const el = (id) => document.getElementById(id);
-  const table = el('table');
-  const apiBase = el('apiBase');
-  const from = el('from');
-  const to = el('to');
-  const token = el('token');
-  const owner = el('owner');
-  const order = el('order');
-  const limit = el('limit');
-  const offset = el('offset');
-  const spanWrap = document.getElementById('spanWrap');
-  const spanSel = document.getElementById('span');
-  const runBtn = el('run');
-  const clearBtn = el('clear');
-  const errorBox = el('error');
-  const summary = el('summary');
-  const thead = document.querySelector('#grid thead');
-  const tbody = document.querySelector('#grid tbody');
+      // 新增：当前数据与轴状态
+      let currentRows = [];
+      let currentXKey = "";
+      let currentYKey = "";
+      // 新增：X 轴是否反转与索引映射（图上索引 -> 原 rows 索引）
+      let reverseX = true; // 默认 X 轴反序
+      let chartIndexMap = [];
 
-  // 新增：图表相关引用与状态
-  const chartWrap = document.getElementById('chartWrap');
-  const chartControls = document.getElementById('chartControls');
-  const chartX = document.getElementById('chartX');
-  const chartY = document.getElementById('chartY');
-  const chartEl = document.getElementById('chart');
-  const chartCount = document.getElementById('chartCount');
-  const chartPoint = document.getElementById('chartPoint');
-  // 新增：反转按钮引用
-  const toggleReverse = document.getElementById('toggleReverse');
-  let chartInstance = null;
+      // 新增：工具函数
+      // 显式时间字段列表：仅这些字段按时间处理
+      const TIME_FIELDS = [
+        "statistics_timestamp",
+        "start_timestamp",
+        "end_timestamp",
+        "checked_at",
+        "created_at",
+        "updated_at",
+        "start_checked_at",
+        "end_checked_at",
+        "last_processed_at",
+        "block_time",
+        "block_timestamp",
+        "statistics_date",
+      ];
+      function isNum(v) {
+        return typeof v === "number" && isFinite(v);
+      }
+      function isISO(s) {
+        return typeof s === "string" && !isNaN(Date.parse(s));
+      }
+      // 与 rank/index.html 对齐的时间解析与本地化
+      function pad2(n) {
+        return String(n).padStart(2, "0");
+      }
+      function fmtLocal(d) {
+        return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(
+          d.getDate()
+        )} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(
+          d.getSeconds()
+        )}`;
+      }
+      function parseToDate(v) {
+        if (v === null || v === undefined) return null;
+        if (typeof v === "number") {
+          const ms = v < 1e12 ? v * 1000 : v;
+          const d = new Date(ms);
+          return isNaN(d) ? null : d;
+        }
+        const s = String(v).trim();
+        if (!s) return null;
+        if (/^\d+$/.test(s)) {
+          const num = Number(s);
+          const ms = num < 1e12 ? num * 1000 : num;
+          const d = new Date(ms);
+          return isNaN(d) ? null : d;
+        }
+        const m = s.match(
+          /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/
+        );
+        if (m) {
+          const [, y, mo, d, h = "00", mi = "00", se = "00"] = m;
+          return new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +se));
+        }
+        const d = new Date(s);
+        return isNaN(d) ? null : d;
+      }
+      function toLocalStr(v) {
+        const d = parseToDate(v);
+        return d ? fmtLocal(d) : v ?? "";
+      }
+      function toLabel(x, key) {
+        // 仅日期字符串保持原样展示
+        if (typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x)) return x;
+        // 只有当列名在时间字段数组内，才按时间格式化
+        if (TIME_FIELDS.includes(String(key || ""))) {
+          const d = parseToDate(x);
+          if (d) return fmtLocal(d);
+        }
+        return String(x ?? "");
+      }
+      function detectCols(rows) {
+        const colsRaw = Array.from(
+          new Set(rows.flatMap((r) => Object.keys(r)))
+        );
+        // 隐藏字段列表：不在表格和图表中展示
+        const HIDDEN_FIELDS = new Set(["bucket", "rn"]);
+        const cols = colsRaw.filter((c) => !HIDDEN_FIELDS.has(c));
+        const numeric = cols.filter((c) =>
+          rows.some(
+            (r) =>
+              isNum(r[c]) ||
+              (!isNaN(parseFloat(r[c])) && r[c] !== null && r[c] !== "")
+          )
+        );
+        const timeCandidates = cols.filter((c) => TIME_FIELDS.includes(c));
+        // 仅时间字段用于 X 轴，去掉 id
+        const xCandidates = timeCandidates.filter((c) => c !== "id");
+        // Y 轴仅数值，剔除所有时间相关字段与 id
+        const yCandidates = numeric.filter(
+          (c) => !TIME_FIELDS.includes(c) && c !== "id"
+        );
+        return { cols, numeric, timeCandidates, xCandidates, yCandidates };
+      }
 
-  // 新增：当前数据与轴状态
-  let currentRows = [];
-  let currentXKey = '';
-  let currentYKey = '';
-  // 新增：X 轴是否反转与索引映射（图上索引 -> 原 rows 索引）
-  let reverseX = true; // 默认 X 轴反序
-  let chartIndexMap = [];
+      // 新增：字段中文名映射与获取函数（请按需补充映射）
+      const fieldLabels = {
+        id: "ID",
+        // v2ex_hodl / v2ex_hodl_history
+        hodl_10k_addresses_count: "HODL 1万地址数",
+        new_accounts_via_solana: "通过 Solana 新增账号数",
+        total_solana_addresses_linked: "已关联的 Solana 地址总数",
+        sol_tip_operations_count: "SOL 打赏操作次数",
+        member_tips_sent: "成员发送打赏次数",
+        member_tips_received: "成员收到打赏次数",
+        total_sol_tip_amount: "SOL 打赏总额",
+        v2ex_token_tip_count: "V2EX 代币打赏次数",
+        total_v2ex_token_tip_amount: "V2EX 代币打赏总额",
+        statistics_timestamp: "统计时间",
+        start_timestamp: "开始时间",
+        end_timestamp: "结束时间",
 
-  // 新增：工具函数
-  // 显式时间字段列表：仅这些字段按时间处理
-  const TIME_FIELDS = [
-    'statistics_timestamp',
-    'start_timestamp',
-    'end_timestamp',
-    'checked_at',
-    'created_at',
-    'updated_at',
-    'start_checked_at',
-    'end_checked_at',
-    'last_processed_at',
-    'block_time',
-    'block_timestamp',
-    'statistics_date'
-  ];
-  function isNum(v) { return typeof v === 'number' && isFinite(v); }
-  function isISO(s) { return typeof s === 'string' && !isNaN(Date.parse(s)); }
-  // 与 rank/index.html 对齐的时间解析与本地化
-  function pad2(n){ return String(n).padStart(2,'0'); }
-  function fmtLocal(d){
-    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-  }
-  function parseToDate(v){
-    if (v === null || v === undefined) return null;
-    if (typeof v === 'number') {
-      const ms = v < 1e12 ? v * 1000 : v;
-      const d = new Date(ms);
-      return isNaN(d) ? null : d;
-    }
-    const s = String(v).trim();
-    if (!s) return null;
-    if (/^\d+$/.test(s)) {
-      const num = Number(s);
-      const ms = num < 1e12 ? num * 1000 : num;
-      const d = new Date(ms);
-      return isNaN(d) ? null : d;
-    }
-    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
-    if (m) {
-      const [, y, mo, d, h = '00', mi = '00', se = '00'] = m;
-      return new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +se));
-    }
-    const d = new Date(s);
-    return isNaN(d) ? null : d;
-  }
-  function toLocalStr(v){
-    const d = parseToDate(v);
-    return d ? fmtLocal(d) : (v ?? '');
-  }
-  function toLabel(x, key) {
-    // 仅日期字符串保持原样展示
-    if (typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x)) return x;
-    // 只有当列名在时间字段数组内，才按时间格式化
-    if (TIME_FIELDS.includes(String(key || ''))) {
-      const d = parseToDate(x);
-      if (d) return fmtLocal(d);
-    }
-    return String(x ?? '');
-  }
-  function detectCols(rows) {
-    const colsRaw = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
-    // 隐藏字段列表：不在表格和图表中展示
-    const HIDDEN_FIELDS = new Set(['bucket', 'rn']);
-    const cols = colsRaw.filter(c => !HIDDEN_FIELDS.has(c));
-    const numeric = cols.filter(c => rows.some(r => isNum(r[c]) || (!isNaN(parseFloat(r[c])) && r[c] !== null && r[c] !== '')));
-    const timeCandidates = cols.filter(c => TIME_FIELDS.includes(c));
-    // 仅时间字段用于 X 轴，去掉 id
-    const xCandidates = timeCandidates.filter(c => c !== 'id');
-    // Y 轴仅数值，剔除所有时间相关字段与 id
-    const yCandidates = numeric.filter(c => !TIME_FIELDS.includes(c) && c !== 'id');
-    return { cols, numeric, timeCandidates, xCandidates, yCandidates };
-  }
+        // v2exer_solana_address
+        owner_address: "持有者地址",
+        v2ex_username: "V2EX 用户名",
+        avatar_url: "头像链接",
+        token_address: "代币 Mint 地址",
+        token_account_address: "Token 账户地址",
+        hold_rank: "持币排名",
+        hold_amount: "持币数量",
+        decimals: "小数位",
+        hold_percentage: "持币占比",
+        checked_at: "检查时间",
+        // 新增：排名变化
+        rank_delta: "排名变化",
 
-  // 新增：字段中文名映射与获取函数（请按需补充映射）
-  const fieldLabels = {
-    id: "ID", 
-    // v2ex_hodl / v2ex_hodl_history
-    hodl_10k_addresses_count: "HODL 1万地址数",
-    new_accounts_via_solana: "通过 Solana 新增账号数",
-    total_solana_addresses_linked: "已关联的 Solana 地址总数",
-    sol_tip_operations_count: "SOL 打赏操作次数",
-    member_tips_sent: "成员发送打赏次数",
-    member_tips_received: "成员收到打赏次数",
-    total_sol_tip_amount: "SOL 打赏总额",
-    v2ex_token_tip_count: "V2EX 代币打赏次数",
-    total_v2ex_token_tip_amount: "V2EX 代币打赏总额",
-    statistics_timestamp: "统计时间",
-    start_timestamp: "开始时间",
-    end_timestamp: "结束时间",
+        // v2exer_profile
+        solana_address: "Solana 地址",
+        created_at: "创建时间",
+        updated_at: "更新时间",
 
-    // v2exer_solana_address
-    owner_address: "持有者地址",
-    v2ex_username: "V2EX 用户名",
-    avatar_url: "头像链接",
-    token_address: "代币 Mint 地址",
-    token_account_address: "Token 账户地址",
-    hold_rank: "持币排名",
-    hold_amount: "持币数量",
-    decimals: "小数位",
-    hold_percentage: "持币占比",
-    checked_at: "检查时间",
-    // 新增：排名变化
-    rank_delta: "排名变化",
+        // v2exer_solana_address_history
+        start_checked_at: "开始检查时间",
+        end_checked_at: "结束检查时间",
 
-    // v2exer_profile
-    solana_address: "Solana 地址",
-    created_at: "创建时间",
-    updated_at: "更新时间",
+        // job_watermark
+        job_name: "任务名称",
+        last_processed_at: "上次处理时间",
+        extra: "附加信息",
 
-    // v2exer_solana_address_history
-    start_checked_at: "开始检查时间",
-    end_checked_at: "结束检查时间",
+        peak_online_users: "峰值在线用户数",
+        current_online_users: "当前在线用户数",
 
-    // job_watermark
-    job_name: "任务名称",
-    last_processed_at: "上次处理时间",
-    extra: "附加信息",
+        statistics_date: "统计日期",
+      };
+      function getLabel(k) {
+        return fieldLabels[k] || k;
+      }
 
-    peak_online_users: "峰值在线用户数",
-    current_online_users: "当前在线用户数",
+      function fillSelect(select, items, selected) {
+        select.innerHTML = items
+          .map((k) => `<option value="${k}">${getLabel(k)}</option>`)
+          .join("");
+        if (selected && items.includes(selected)) select.value = selected;
+      }
 
-    statistics_date: "统计日期",
-  };
-  function getLabel(k) { return fieldLabels[k] || k; }
+      // 数值格式化（统一两位小数）
+      const nfCompact =
+        Intl && Intl.NumberFormat
+          ? new Intl.NumberFormat("zh-CN", {
+              notation: "compact",
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })
+          : null;
+      function fmtNum(n) {
+        if (!isFinite(n)) return "";
+        return nfCompact
+          ? nfCompact.format(n)
+          : String(
+              Math.abs(n) >= 1000
+                ? (n / 1000).toFixed(2) + "K"
+                : Number(n).toFixed(2)
+            );
+      }
 
-  function fillSelect(select, items, selected) {
-    select.innerHTML = items.map(k => `<option value="${k}">${getLabel(k)}</option>`).join('');
-    if (selected && items.includes(selected)) select.value = selected;
-  }
+      // 新增：将标签最多拆成两行（优先按空格；否则按长度切分）
+      function wrap2Lines(s) {
+        if (Array.isArray(s)) return s.slice(0, 2);
+        const str = String(s ?? "");
+        if (!str) return "";
+        const parts = str.split(/\s+/);
+        if (parts.length > 1) {
+          const first = parts.shift();
+          let second = parts.join(" ");
+          if (second.length > 40) second = second.slice(0, 40) + "…";
+          return [first, second];
+        }
+        const max = 12;
+        if (str.length <= max) return str;
+        const first = str.slice(0, max);
+        let second = str.slice(max, max * 2);
+        if (str.length > max * 2) second += "…";
+        return [first, second];
+      }
 
-  // 数值格式化（统一两位小数）
-  const nfCompact = (Intl && Intl.NumberFormat)
-    ? new Intl.NumberFormat('zh-CN', { notation: 'compact', minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : null;
-  function fmtNum(n) {
-    if (!isFinite(n)) return '';
-    return nfCompact
-      ? nfCompact.format(n)
-      : String(Math.abs(n) >= 1000 ? (n/1000).toFixed(2) + 'K' : Number(n).toFixed(2));
-  }
+      // 新增：更新反转按钮文本
+      function updateReverseBtn() {
+        toggleReverse.textContent = reverseX ? "X轴：反序" : "X轴：正序";
+      }
 
-  // 新增：将标签最多拆成两行（优先按空格；否则按长度切分）
-  function wrap2Lines(s) {
-    if (Array.isArray(s)) return s.slice(0, 2);
-    const str = String(s ?? '');
-    if (!str) return '';
-    const parts = str.split(/\s+/);
-    if (parts.length > 1) {
-      const first = parts.shift();
-      let second = parts.join(' ');
-      if (second.length > 40) second = second.slice(0, 40) + '…';
-      return [first, second];
-    }
-    const max = 12;
-    if (str.length <= max) return str;
-    const first = str.slice(0, max);
-    let second = str.slice(max, max * 2);
-    if (str.length > max * 2) second += '…';
-    return [first, second];
-  }
+      // 新增：格式化 X（用于显示，不换行）
+      function fmtX(x, key) {
+        return toLabel(x, key);
+      }
 
-  // 新增：更新反转按钮文本
-  function updateReverseBtn() {
-    toggleReverse.textContent = reverseX ? 'X轴：反序' : 'X轴：正序';
-  }
+      // 修改：更新 hover 点信息，使用索引映射
+      function updateHovered(idx) {
+        const rowIndex =
+          chartIndexMap && chartIndexMap[idx] != null
+            ? chartIndexMap[idx]
+            : idx;
+        if (
+          !currentRows ||
+          rowIndex == null ||
+          rowIndex < 0 ||
+          rowIndex >= currentRows.length
+        ) {
+          chartPoint.textContent = "";
+          return;
+        }
+        const r = currentRows[rowIndex];
+        const xv = fmtX(r[currentXKey], currentXKey);
+        const yvRaw = r[currentYKey];
+        const yvNum = typeof yvRaw === "string" ? parseFloat(yvRaw) : yvRaw;
+        chartPoint.textContent = `当前点：${getLabel(
+          currentXKey
+        )}=${xv}，${getLabel(currentYKey)}=${fmtNum(yvNum)}`;
+      }
 
-  // 新增：格式化 X（用于显示，不换行）
-  function fmtX(x, key) { return toLabel(x, key); }
+      function buildChart(rows, xKey, yKey) {
+        // 新增：根据反转状态生成索引序列
+        const idxs = rows.map((_, i) => i);
+        if (reverseX) idxs.reverse();
+        chartIndexMap = idxs;
 
-  // 修改：更新 hover 点信息，使用索引映射
-  function updateHovered(idx) {
-    const rowIndex = (chartIndexMap && chartIndexMap[idx] != null) ? chartIndexMap[idx] : idx;
-    if (!currentRows || rowIndex == null || rowIndex < 0 || rowIndex >= currentRows.length) {
-      chartPoint.textContent = '';
-      return;
-    }
-    const r = currentRows[rowIndex];
-    const xv = fmtX(r[currentXKey], currentXKey);
-    const yvRaw = r[currentYKey];
-    const yvNum = typeof yvRaw === 'string' ? parseFloat(yvRaw) : yvRaw;
-    chartPoint.textContent = `当前点：${getLabel(currentXKey)}=${xv}，${getLabel(currentYKey)}=${fmtNum(yvNum)}`;
-  }
+        const labels = idxs.map((i) =>
+          wrap2Lines(toLabel(rows[i][xKey], xKey))
+        );
+        const data = idxs.map((i) => {
+          const v = rows[i][yKey];
+          const n = typeof v === "string" ? parseFloat(v) : v;
+          return isFinite(n) ? n : null;
+        });
 
-  function buildChart(rows, xKey, yKey) {
-    // 新增：根据反转状态生成索引序列
-    const idxs = rows.map((_, i) => i);
-    if (reverseX) idxs.reverse();
-    chartIndexMap = idxs;
+        // 基于数据自动收紧 Y 轴范围（5% padding），忽略 null
+        const nums = data.filter((v) => v != null && isFinite(v));
+        let yMin = Math.min(...nums),
+          yMax = Math.max(...nums);
+        if (!isFinite(yMin) || !isFinite(yMax)) {
+          yMin = 0;
+          yMax = 1;
+        }
+        if (yMin === yMax) {
+          // 避免零范围
+          const eps = Math.abs(yMin || 1) * 0.05;
+          yMin = yMin - eps;
+          yMax = yMax + eps;
+        } else {
+          const pad = (yMax - yMin) * 0.05;
+          yMin -= pad;
+          yMax += pad;
+        }
 
-  const labels = idxs.map(i => wrap2Lines(toLabel(rows[i][xKey], xKey)));
-    const data = idxs.map(i => {
-      const v = rows[i][yKey];
-      const n = typeof v === 'string' ? parseFloat(v) : v;
-      return isFinite(n) ? n : null;
-    });
-
-    // 基于数据自动收紧 Y 轴范围（5% padding），忽略 null
-    const nums = data.filter(v => v != null && isFinite(v));
-    let yMin = Math.min(...nums), yMax = Math.max(...nums);
-    if (!isFinite(yMin) || !isFinite(yMax)) { yMin = 0; yMax = 1; }
-    if (yMin === yMax) { // 避免零范围
-      const eps = Math.abs(yMin || 1) * 0.05;
-      yMin = yMin - eps;
-      yMax = yMax + eps;
-    } else {
-      const pad = (yMax - yMin) * 0.05;
-      yMin -= pad; yMax += pad;
-    }
-
-    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-    chartInstance = new Chart(chartEl.getContext('2d'), {
-      // 仅当列名在时间字段数组中时使用折线图，否则用柱状图
-      type: (TIME_FIELDS.includes(xKey)) ? 'line' : 'bar',
-      data: { labels, datasets: [{ label: getLabel(yKey), data, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.15)', tension: 0.25, pointRadius: 0 }] },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        // 新增：更友好的交互模式
-        interaction: { mode: 'index', intersect: false },
-        // 新增：hover 时更新“当前点”
-        onHover: (evt, activeEls) => {
-          if (activeEls && activeEls.length) updateHovered(activeEls[0].index);
-          else chartPoint.textContent = '';
-        },
-        scales: {
-          y: {
-            suggestedMin: yMin,
-            suggestedMax: yMax,
-            ticks: { callback: (v) => fmtNum(v) }
-          },
-          x: { ticks: { maxRotation: 0, minRotation: 0, autoSkip: true, autoSkipPadding: 12 } }
-        },
-        // 新增：自定义 tooltip 的标题与数值格式
-        plugins: {
-          legend: { display: true },
-          tooltip: {
-            enabled: true,
-            callbacks: {
-              title: (items) => {
-                const idx = items?.[0]?.dataIndex ?? -1;
-                const rowIndex = (chartIndexMap && chartIndexMap[idx] != null) ? chartIndexMap[idx] : idx;
-                if (rowIndex < 0 || !currentRows.length) return '';
-                return fmtX(currentRows[rowIndex][currentXKey], currentXKey);
+        if (chartInstance) {
+          chartInstance.destroy();
+          chartInstance = null;
+        }
+        chartInstance = new Chart(chartEl.getContext("2d"), {
+          // 仅当列名在时间字段数组中时使用折线图，否则用柱状图
+          type: TIME_FIELDS.includes(xKey) ? "line" : "bar",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: getLabel(yKey),
+                data,
+                borderColor: "#2563eb",
+                backgroundColor: "rgba(37,99,235,.15)",
+                tension: 0.25,
+                pointRadius: 0,
               },
-              label: (item) => `${getLabel(currentYKey)}: ${fmtNum(item.raw)}`
-            }
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            // 新增：更友好的交互模式
+            interaction: { mode: "index", intersect: false },
+            // 新增：hover 时更新“当前点”
+            onHover: (evt, activeEls) => {
+              if (activeEls && activeEls.length)
+                updateHovered(activeEls[0].index);
+              else chartPoint.textContent = "";
+            },
+            scales: {
+              y: {
+                suggestedMin: yMin,
+                suggestedMax: yMax,
+                ticks: { callback: (v) => fmtNum(v) },
+              },
+              x: {
+                ticks: {
+                  maxRotation: 0,
+                  minRotation: 0,
+                  autoSkip: true,
+                  autoSkipPadding: 12,
+                },
+              },
+            },
+            // 新增：自定义 tooltip 的标题与数值格式
+            plugins: {
+              legend: { display: true },
+              tooltip: {
+                enabled: true,
+                callbacks: {
+                  title: (items) => {
+                    const idx = items?.[0]?.dataIndex ?? -1;
+                    const rowIndex =
+                      chartIndexMap && chartIndexMap[idx] != null
+                        ? chartIndexMap[idx]
+                        : idx;
+                    if (rowIndex < 0 || !currentRows.length) return "";
+                    return fmtX(
+                      currentRows[rowIndex][currentXKey],
+                      currentXKey
+                    );
+                  },
+                  label: (item) =>
+                    `${getLabel(currentYKey)}: ${fmtNum(item.raw)}`,
+                },
+              },
+            },
+          },
+        });
+      }
+
+      function setupChart(rows) {
+        if (!rows || rows.length === 0) {
+          chartWrap.hidden = true;
+          chartControls.hidden = true;
+          return;
+        }
+        const { xCandidates, yCandidates } = detectCols(rows);
+        if (!xCandidates.length || !yCandidates.length) {
+          chartWrap.hidden = true;
+          chartControls.hidden = true;
+          return;
+        }
+
+        const xDefault = xCandidates[0];
+        const yDefault = yCandidates[0];
+
+        fillSelect(chartX, xCandidates, xDefault);
+        fillSelect(chartY, yCandidates, yDefault);
+
+        chartControls.hidden = false;
+        chartWrap.hidden = false;
+        chartCount.textContent = `数据点：${rows.length}`;
+
+        currentRows = rows;
+        currentXKey = chartX.value;
+        currentYKey = chartY.value;
+
+        updateReverseBtn();
+        buildChart(rows, chartX.value, chartY.value);
+
+        chartX.onchange = () => {
+          currentXKey = chartX.value;
+          buildChart(rows, chartX.value, chartY.value);
+          chartPoint.textContent = "";
+        };
+        chartY.onchange = () => {
+          currentYKey = chartY.value;
+          buildChart(rows, chartX.value, chartY.value);
+          chartPoint.textContent = "";
+        };
+
+        toggleReverse.onclick = () => {
+          reverseX = !reverseX;
+          updateReverseBtn();
+          buildChart(currentRows, currentXKey, currentYKey);
+          chartPoint.textContent = "";
+        };
+      }
+
+      function getBase() {
+        let base = (apiBase.value || "").trim();
+        if (!base) return "";
+        // 去掉尾部斜杠
+        if (base.endsWith("/")) base = base.slice(0, -1);
+        return base;
+      }
+
+      // 新增：将 datetime-local 本地时间转为 ISO UTC 字符串
+      function getDateParamStr(inputEl) {
+        const v = (inputEl?.value || "").trim();
+        if (!v) return "";
+        if (inputEl.type === "datetime-local") {
+          const d = new Date(v);
+          if (!isNaN(d)) return d.toISOString();
+        }
+        const d2 = new Date(v);
+        if (!isNaN(d2)) return d2.toISOString();
+        return v;
+      }
+
+      function buildUrl() {
+        const t = table.value;
+        const params = new URLSearchParams();
+        const fv = getDateParamStr(from);
+        const tv = getDateParamStr(to);
+        if (fv) params.set("from", fv);
+        if (tv) params.set("to", tv);
+        if (order.value) params.set("order", order.value);
+        if (limit.value) params.set("limit", limit.value);
+        if (offset.value) params.set("offset", offset.value);
+        // 仅 stats 支持 span
+        if (t === "stats" && spanSel && spanSel.value)
+          params.set("span", spanSel.value);
+        if (t.startsWith("holders") && token?.value)
+          params.set("token", token.value);
+        if (t === "holders" || t === "holders_history") {
+          if (owner?.value) params.set("owner", owner.value);
+        } else if (t === "profiles") {
+          if (owner?.value) params.set("address", owner.value);
+        }
+        const path = {
+          stats: "/api/stats",
+          stats_history: "/api/stats/history",
+        }[t];
+        const base = getBase();
+        return `${base}${path}?${params.toString()}`;
+      }
+
+      async function run() {
+        errorBox.hidden = true;
+        errorBox.textContent = "";
+        summary.textContent = "查询中...";
+        thead.innerHTML = "";
+        tbody.innerHTML = "";
+        try {
+          const url = buildUrl();
+          const base = getBase();
+          if (!base)
+            throw new Error("请先填写 API Base（你的 Worker API 域名）");
+          const res = await fetch(url);
+          const data = await res.json();
+          if (!data.ok) throw new Error(data.error || "请求失败");
+          const rows = data.results || [];
+          summary.textContent = `count=${data.count} limit=${data.limit} offset=${data.offset} order=${data.order}`;
+          if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td class="muted">无数据</td></tr>';
+            chartWrap.hidden = true;
+            chartControls.hidden = true;
+            return;
           }
+          // 与 detectCols 的隐藏策略保持一致
+          const HIDDEN_FIELDS = new Set(["bucket", "rn"]);
+          const cols = Array.from(
+            new Set(rows.flatMap((r) => Object.keys(r)))
+          ).filter((c) => !HIDDEN_FIELDS.has(c));
+          thead.innerHTML =
+            "<tr>" +
+            cols.map((c) => `<th>${getLabel(c)}</th>`).join("") +
+            "</tr>";
+          const esc = (v) =>
+            v == null
+              ? ""
+              : String(v).replace(
+                  /[&<>]/g,
+                  (s) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[s])
+                );
+          tbody.innerHTML = rows
+            .map(
+              (r) =>
+                "<tr>" +
+                cols
+                  .map((c) => {
+                    const v = r[c];
+                    const isDateOnly =
+                      typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+                    // 仅日期(YYYY-MM-DD)保持原样；其它时间字段本地化
+                    if (TIME_FIELDS.includes(c) && !isDateOnly) {
+                      return `<td>${esc(toLocalStr(v))}</td>`;
+                    }
+                    return `<td>${esc(v)}</td>`;
+                  })
+                  .join("") +
+                "</tr>"
+            )
+            .join("");
+
+          // 新增：绘制图表
+          setupChart(rows);
+        } catch (e) {
+          summary.textContent = "";
+          errorBox.hidden = false;
+          errorBox.textContent = e.message || String(e);
+          chartWrap.hidden = true;
+          chartControls.hidden = true;
+          if (chartInstance) {
+            chartInstance.destroy();
+            chartInstance = null;
+          }
+          chartPoint.textContent = "";
         }
       }
-    });
-  }
 
-  function setupChart(rows) {
-    if (!rows || rows.length === 0) { chartWrap.hidden = true; chartControls.hidden = true; return; }
-    const { xCandidates, yCandidates } = detectCols(rows);
-    if (!xCandidates.length || !yCandidates.length) { chartWrap.hidden = true; chartControls.hidden = true; return; }
-
-    const xDefault = xCandidates[0];
-    const yDefault = yCandidates[0];
-
-    fillSelect(chartX, xCandidates, xDefault);
-    fillSelect(chartY, yCandidates, yDefault);
-
-    chartControls.hidden = false;
-    chartWrap.hidden = false;
-    chartCount.textContent = `数据点：${rows.length}`;
-
-    currentRows = rows;
-    currentXKey = chartX.value;
-    currentYKey = chartY.value;
-
-    updateReverseBtn();
-    buildChart(rows, chartX.value, chartY.value);
-
-    chartX.onchange = () => {
-      currentXKey = chartX.value;
-      buildChart(rows, chartX.value, chartY.value);
-      chartPoint.textContent = '';
-    };
-    chartY.onchange = () => {
-      currentYKey = chartY.value;
-      buildChart(rows, chartX.value, chartY.value);
-      chartPoint.textContent = '';
-    };
-
-    toggleReverse.onclick = () => {
-      reverseX = !reverseX;
-      updateReverseBtn();
-      buildChart(currentRows, currentXKey, currentYKey);
-      chartPoint.textContent = '';
-    };
-  }
-
-  function getBase() {
-    let base = (apiBase.value || '').trim();
-    if (!base) return '';
-    // 去掉尾部斜杠
-    if (base.endsWith('/')) base = base.slice(0, -1);
-    return base;
-  }
-
-  // 新增：将 datetime-local 本地时间转为 ISO UTC 字符串
-  function getDateParamStr(inputEl){
-    const v = (inputEl?.value || '').trim();
-    if (!v) return '';
-    if (inputEl.type === 'datetime-local') {
-      const d = new Date(v);
-      if (!isNaN(d)) return d.toISOString();
-    }
-    const d2 = new Date(v);
-    if (!isNaN(d2)) return d2.toISOString();
-    return v;
-  }
-
-  function buildUrl() {
-    const t = table.value;
-    const params = new URLSearchParams();
-    const fv = getDateParamStr(from);
-    const tv = getDateParamStr(to);
-    if (fv) params.set('from', fv);
-    if (tv) params.set('to', tv);
-    if (order.value) params.set('order', order.value);
-    if (limit.value) params.set('limit', limit.value);
-    if (offset.value) params.set('offset', offset.value);
-    // 仅 stats 支持 span
-    if (t === 'stats' && spanSel && spanSel.value) params.set('span', spanSel.value);
-    if (t.startsWith('holders') && token?.value) params.set('token', token.value);
-    if (t === 'holders' || t === 'holders_history') {
-      if (owner?.value) params.set('owner', owner.value);
-    } else if (t === 'profiles') {
-      if (owner?.value) params.set('address', owner.value);
-    }
-    const path = {
-      stats: '/api/stats',
-      stats_history: '/api/stats/history',
-    }[t];
-    const base = getBase();
-    return `${base}${path}?${params.toString()}`;
-  }
-
-  async function run() {
-    errorBox.hidden = true; errorBox.textContent = '';
-    summary.textContent = '查询中...';
-    thead.innerHTML = ''; tbody.innerHTML = '';
-    try {
-  const url = buildUrl();
-  const base = getBase();
-  if (!base) throw new Error('请先填写 API Base（你的 Worker API 域名）');
-      const res = await fetch(url);
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || '请求失败');
-      const rows = data.results || [];
-      summary.textContent = `count=${data.count} limit=${data.limit} offset=${data.offset} order=${data.order}`;
-      if (rows.length === 0) { tbody.innerHTML = '<tr><td class="muted">无数据</td></tr>'; chartWrap.hidden = true; chartControls.hidden = true; return; }
-      // 与 detectCols 的隐藏策略保持一致
-      const HIDDEN_FIELDS = new Set(['bucket', 'rn']);
-      const cols = Array.from(new Set(rows.flatMap(r => Object.keys(r)))).filter(c => !HIDDEN_FIELDS.has(c));
-      thead.innerHTML = '<tr>' + cols.map(c => `<th>${getLabel(c)}</th>`).join('') + '</tr>';
-      const esc = (v) => v == null ? '' : String(v).replace(/[&<>]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[s]));
-      tbody.innerHTML = rows.map(r => '<tr>' + cols.map(c => {
-        const v = r[c];
-        const isDateOnly = typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
-        // 仅日期(YYYY-MM-DD)保持原样；其它时间字段本地化
-        if (TIME_FIELDS.includes(c) && !isDateOnly) {
-          return `<td>${esc(toLocalStr(v))}</td>`;
+      runBtn.addEventListener("click", run);
+      clearBtn.addEventListener("click", () => {
+        tbody.innerHTML = "";
+        summary.textContent = "";
+        errorBox.hidden = true;
+        chartWrap.hidden = true;
+        chartControls.hidden = true;
+        chartPoint.textContent = "";
+        currentRows = [];
+        currentXKey = "";
+        currentYKey = "";
+        if (chartInstance) {
+          chartInstance.destroy();
+          chartInstance = null;
         }
-        return `<td>${esc(v)}</td>`;
-      }).join('') + '</tr>').join('');
+      });
 
-      // 新增：绘制图表
-      setupChart(rows);
-    } catch (e) {
-      summary.textContent = '';
-      errorBox.hidden = false;
-      errorBox.textContent = e.message || String(e);
-      chartWrap.hidden = true; chartControls.hidden = true;
-      if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-      chartPoint.textContent = '';
-    }
-  }
+      // 记忆 API Base
+      (function initBase() {
+        const saved = localStorage.getItem("v2ex_hodl_api_base") || "";
+        if (saved) apiBase.value = saved;
+        apiBase.addEventListener("change", () => {
+          localStorage.setItem("v2ex_hodl_api_base", apiBase.value.trim());
+        });
+      })();
 
-  runBtn.addEventListener('click', run);
-  clearBtn.addEventListener('click', () => {
-    tbody.innerHTML = ''; summary.textContent=''; errorBox.hidden = true;
-    chartWrap.hidden = true; chartControls.hidden = true;
-    chartPoint.textContent = '';
-    currentRows = []; currentXKey = ''; currentYKey = '';
-    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-  });
-
-  // 记忆 API Base
-  (function initBase(){
-    const saved = localStorage.getItem('v2ex_hodl_api_base') || '';
-    if (saved) apiBase.value = saved;
-    apiBase.addEventListener('change', () => {
-      localStorage.setItem('v2ex_hodl_api_base', apiBase.value.trim());
-    });
-  })();
-
-  // 初始化：根据所选数据表显示/隐藏 span 控件
-  function updateSpanVisibility(){
-    const show = table.value === 'stats';
-    spanWrap.hidden = !show;
-  }
-  updateSpanVisibility();
-  table.addEventListener('change', updateSpanVisibility);
-
-  // 初始化 span：支持从 URL 查询参数中读取 ?span=1m 之类的值
-  (function initSpanFromUrl(){
-    try {
-      const usp = new URLSearchParams(location.search || '');
-      const v = usp.get('span') || '';
-      if (v && spanSel && spanSel.querySelector(`option[value="${v}"]`)) {
-        spanSel.value = v;
-      } else if (spanSel) {
-        // 默认 1 分钟
-        spanSel.value = '1m';
+      // 初始化：根据所选数据表显示/隐藏 span 控件
+      function updateSpanVisibility() {
+        const show = table.value === "stats";
+        spanWrap.hidden = !show;
       }
-    } catch {}
-  })();
+      updateSpanVisibility();
+      table.addEventListener("change", updateSpanVisibility);
 
-  // pad2 已在上方定义；fmtLocal 已更新为含秒版本
-</script>
-</body>
+      // 初始化 span：支持从 URL 查询参数中读取 ?span=1m 之类的值
+      (function initSpanFromUrl() {
+        try {
+          const usp = new URLSearchParams(location.search || "");
+          const v = usp.get("span") || "";
+          if (v && spanSel && spanSel.querySelector(`option[value="${v}"]`)) {
+            spanSel.value = v;
+          } else if (spanSel) {
+            // 默认 1 分钟
+            spanSel.value = "1m";
+          }
+        } catch {}
+      })();
+
+      // pad2 已在上方定义；fmtLocal 已更新为含秒版本
+    </script>
+  </body>
 </html>
