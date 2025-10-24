@@ -231,7 +231,7 @@
 		hold_amount: number,
 		decimals: number,
 	hold_percentage: number,
-	statistics_date: string, // UTC 文本 YYYY-MM-DD
+	changed_at: string, // UTC 文本 YYYY-MM-DD
 	rank_delta: number | null
 	}>
 }
