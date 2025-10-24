@@ -372,7 +372,7 @@
         </tr>`;
       dtbody.innerHTML = rows.map(r => {
         // /api/holders/history 按日聚合，使用 changed_at (UTC: YYYY-MM-DD)
-        const dateStr = esc(r.changed_at || '');
+        const dateStr = esc(toLocalStr(r.changed_at) || '');
         const amt = fmtAmount(+r.hold_amount || 0);
         const pct = fmtPct(r.hold_percentage);
         const rk = r.hold_rank == null ? '-' : String(r.hold_rank);
