@@ -51,6 +51,10 @@
 		holders: number,
 		price: number,
 		price_change_24h: number,
+		current_online_users: number,
+		btc_price: number,
+		sol_price: number,
+		pump_price: number,
 		total_v2ex_token_tip_amount: number,
 	created_at: string  // UTC 文本 "YYYY-MM-DD HH:MM:SS"
 	}>
@@ -94,6 +98,14 @@
 		total_sol_tip_amount: number,
 		v2ex_token_tip_count: number,
 		total_v2ex_token_tip_amount: number,
+		current_online_users: number,
+		peak_online_users: number,
+		holders: number,
+		price: number,
+		price_change_24h: number,
+		btc_price: number,
+		sol_price: number,
+		pump_price: number,
 	statistics_date: string  // UTC 文本 YYYY-MM-DD
 	}>
 }
@@ -116,31 +128,6 @@
 	ok: true,
 	count: number,
 	order: "asc" | "desc",
-### 3.1) 导入/更新持仓快照（写入）
-
-- 路径：`POST /api/holders/update`
-- Content-Type：`application/json`
-- 请求体示例（与外部同步服务一致）：
-```
-{
-	"ok": true,
-	"token": "9raUVuzeWUk53co63M4WXLWPWE4Xc6Lpn7RS9dnkpump",
-	"count": 120,
-	"holders": [
-		{"address": "...", "owner": "...", "amount": 720000002000000, "decimals": 6, "rank": 1},
-		{"address": "...", "owner": "...", "amount": 41235560060988,  "decimals": 6, "rank": 2}
-	],
-	"totalSupplyBaseUnits": 1000000000000000 // 可选，若省略则默认按 1B * 10^decimals
-}
-```
-- 成功响应：`{ ok: true, token: string, holders: number, inserted: number }`
-- 说明：
-	- amount 为 base units（已按 decimals 放大后的整数），服务端不会再次放大。
-	- 服务端会根据 v2exer_profile 自动补充 `v2ex_username` 和 `avatar_url`。
-	- 支持 UPSERT，并对“掉出榜单”的记录做归档到 `v2exer_solana_address_removed`。
-
----
-
 	limit: number,
 	offset: number,
 	results: Array<{
@@ -163,7 +150,7 @@
 
 ---
 
-### 3.2) 已移除持仓归档：v2exer_solana_address_removed
+## 4) 已移除持仓归档：v2exer_solana_address_removed
 
 - 路径：`GET /api/holders/removed`
 - 排序列：`removed_at`（默认 `order=desc`）
@@ -203,7 +190,7 @@
 
 ---
 
-## 4) Token 持仓历史：v2exer_solana_address_history
+## 5) Token 持仓历史：v2exer_solana_address_history
 
 - 路径：`GET /api/holders/history`
 - 排序列：`statistics_date`（默认 `order=desc`）
@@ -231,85 +218,8 @@
 		hold_amount: number,
 		decimals: number,
 	hold_percentage: number,
-	changed_at: string, // UTC 文本 YYYY-MM-DD
+	statistics_date: string, // UTC 文本 YYYY-MM-DD
 	rank_delta: number | null
-	}>
-}
-```
-
----
-
-## 5) V2EXer 资料：v2exer_profile
-
-- 路径：`GET /api/profiles`
-- 排序列：`updated_at`（默认 `order=desc`）
-- 查询参数：
-	- `username`：按 V2EX 用户名
-	- `address`：按 Solana 地址
-	- `from`/`to`：对 `updated_at` 进行时间过滤
-	- `order`、`limit`、`offset`
-- 成功响应：
-```
-{
-	ok: true,
-	count: number,
-	order: "asc" | "desc",
-	limit: number,
-	offset: number,
-	results: Array<{
-		id: number,
-		v2ex_username: string,
-		solana_address: string,
-		avatar_url: string | null,
-		created_at: string, // UTC 时间
-		updated_at: string  // UTC 时间
-	}>
-}
-```
-
-上传资料（批量导入/更新头像等）：
-- 路径：`POST /profiles/upload`
-- Content-Type：
-	- `multipart/form-data`（字段名任选其一：`file` / `profiles` / `upload`）
-	- 或 `text/plain`
-- 文本格式：每行 `solana_address:v2ex_username:https://avatar...`（头像 URL 可包含冒号）
-- 成功响应：
-```
-{
-	ok: true,
-	total: number,
-	inserted: number,
-	updated: number,
-	skipped: number,
-	errors: Array<{ line: number; reason: string }>
-}
-```
-- 可能的错误：
-	- `405 Method Not Allowed`（非 POST）
-	- `400 file not provided`（multipart 无文件）
-	- `415 Unsupported Content-Type`
-
----
-
-## 6) 增量任务水位：job_watermark
-
-- 路径：`GET /api/watermarks`
-- 排序列：`job_name`（默认 `order=asc`）
-- 查询参数：
-	- `job`：按任务名过滤
-	- `order`、`limit`、`offset`
-- 成功响应：
-```
-{
-	ok: true,
-	count: number,
-	order: "asc" | "desc",
-	limit: number,
-	offset: number,
-	results: Array<{
-		job_name: string,
-		last_processed_at: string, // UTC 时间
-		extra: string | null
 	}>
 }
 ```
