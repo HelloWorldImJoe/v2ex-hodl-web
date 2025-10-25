@@ -463,30 +463,30 @@
       const fieldLabels = {
         id: "ID",
         // v2ex_hodl / v2ex_hodl_history
-        hodl_10k_addresses_count: "HODL 1万地址数",
-        new_accounts_via_solana: "通过 Solana 新增账号数",
-        total_solana_addresses_linked: "已关联的 Solana 地址总数",
-        sol_tip_operations_count: "SOL 打赏操作次数",
-        member_tips_sent: "成员发送打赏次数",
-        member_tips_received: "成员收到打赏次数",
-        total_sol_tip_amount: "SOL 打赏总额",
-        v2ex_token_tip_count: "V2EX 代币打赏次数",
-        total_v2ex_token_tip_amount: "V2EX 代币打赏总额",
+        hodl_10k_addresses_count: "持币1W地址数",
+        new_accounts_via_solana: "SOL新增账号数",
+        total_solana_addresses_linked: "已关联SOL地址数",
+        sol_tip_operations_count: "SOL打赏次数",
+        member_tips_sent: "成员发送打赏数",
+        member_tips_received: "成员收到打赏数",
+        total_sol_tip_amount: "SOL打赏总额",
+        v2ex_token_tip_count: "$V2EX打赏次数",
+        total_v2ex_token_tip_amount: "$V2EX打赏总额",
         statistics_timestamp: "统计时间",
         start_timestamp: "开始时间",
         end_timestamp: "结束时间",
 
         // 新增：/api/stats 的三个字段
         holders: "持有人数",
-        price: "价格",
-        price_change_24h: "24h 涨跌",
+        price: "$V2EX价格",
+        price_change_24h: "$V2EX涨跌(24h)",
 
         // v2exer_solana_address
         owner_address: "持有者地址",
-        v2ex_username: "V2EX 用户名",
+        v2ex_username: "V2EX用户名",
         avatar_url: "头像链接",
-        token_address: "代币 Mint 地址",
-        token_account_address: "Token 账户地址",
+        token_address: "Mint地址",
+        token_account_address: "Token地址",
         hold_rank: "持币排名",
         hold_amount: "持币数量",
         decimals: "小数位",
@@ -496,7 +496,7 @@
         rank_delta: "排名变化",
 
         // v2exer_profile
-        solana_address: "Solana 地址",
+        solana_address: "SOL地址",
         created_at: "创建时间",
         updated_at: "更新时间",
 
@@ -958,14 +958,30 @@
           }
           // 与 detectCols 的隐藏策略保持一致
           const HIDDEN_FIELDS = new Set(["bucket", "rn"]);
-          const cols = Array.from(
+          const originalCols = Array.from(
             new Set(rows.flatMap((r) => Object.keys(r)))
-          ).filter((c) => !HIDDEN_FIELDS.has(c));
-          // 新增：将 created_at 放到列的最后
+          );
+          const cols = originalCols.filter((c) => !HIDDEN_FIELDS.has(c));
+          // 1) 先把 created_at 放到最后
           const createdIdx = cols.indexOf("created_at");
           if (createdIdx > -1) {
             const [created] = cols.splice(createdIdx, 1);
             cols.push(created);
+          }
+          // 2) 将 price 与 price_change_24h 放到 created_at 之前（若存在）
+          const desiredBeforeCreated = ["price", "price_change_24h"];
+          // 仅插入真实存在于数据的字段
+          const toInsert = desiredBeforeCreated.filter((f) => originalCols.includes(f));
+          if (toInsert.length) {
+            // 先从 cols 中移除，避免重复
+            for (const f of toInsert) {
+              const i = cols.indexOf(f);
+              if (i > -1) cols.splice(i, 1);
+            }
+            // 计算插入位置：created_at 之前；若无 created_at 则放末尾
+            let insertIdx = cols.indexOf("created_at");
+            if (insertIdx === -1) insertIdx = cols.length;
+            cols.splice(insertIdx, 0, ...toInsert);
           }
 
           thead.innerHTML =
