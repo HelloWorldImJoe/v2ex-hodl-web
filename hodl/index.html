@@ -685,7 +685,8 @@
           const data = idxs.map((i) => {
             const v = rows[i][yk];
             const n = toNum(v);
-            return isFinite(n) ? n : null;
+            // 屏蔽值为 0 的点（将 0 视为缺失），避免在图上绘制为 0
+            return isFinite(n) && n !== 0 ? n : null;
           });
           return {
             label: getLabel(yk),
